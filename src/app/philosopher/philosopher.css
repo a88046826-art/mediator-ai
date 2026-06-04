@@ -1,0 +1,548 @@
+.phil-wrap {
+  --bg: #14130f;
+  --panel: #1d1b15;
+  --panel2: #252116;
+  --line: #3b362a;
+  --gold: #c8a44d;
+  --gold2: #e3c878;
+  --parch: #f4ecdb;
+  --muted: #a79e88;
+  --D: #c4453a;
+  --O: #d68a1e;
+  --C: #2f8a72;
+  --E: #5566c2;
+
+  background: radial-gradient(900px 500px at 50% -10%, #231f16, transparent 60%), var(--bg);
+  color: var(--parch);
+  font-family: 'Noto Serif KR', 'Gowun Batang', serif;
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+.phil-screen {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 38px 18px 70px;
+  animation: phil-rise 0.5s ease;
+}
+
+@keyframes phil-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── EYEBROW / RULE ── */
+.phil-eyebrow {
+  font-family: 'IBM Plex Mono', monospace;
+  letter-spacing: 0.34em;
+  font-size: 11px;
+  color: var(--gold);
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.phil-h1 {
+  font-family: 'Cormorant Garamond', 'Gowun Batang', serif;
+  font-style: italic;
+  font-weight: 600;
+  font-size: clamp(34px, 9vw, 56px);
+  text-align: center;
+  line-height: 1.05;
+  margin: 10px 0 6px;
+  color: var(--parch);
+}
+
+.phil-lead {
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  max-width: 440px;
+  margin: 0 auto 30px;
+}
+
+.phil-rule {
+  width: 50px;
+  height: 1px;
+  background: var(--gold);
+  margin: 18px auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.phil-rule::before,
+.phil-rule::after {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--gold);
+  position: absolute;
+}
+.phil-rule::before { left: -8px; }
+.phil-rule::after  { right: -8px; }
+
+/* ── AXIS CARDS ── */
+.phil-axes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 26px 0;
+}
+
+.phil-axis {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 15px;
+}
+
+.phil-axis .l {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.phil-axis .n {
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 3px;
+}
+
+.phil-axis .d {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* ── BUTTONS ── */
+.phil-btn {
+  display: block;
+  width: 100%;
+  background: var(--gold);
+  color: #1a1610;
+  border: none;
+  font-family: 'Noto Serif KR', serif;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 2px;
+  padding: 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.phil-btn:hover { background: var(--gold2); }
+
+.phil-btn-ghost {
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--parch);
+  font-family: 'Noto Serif KR', serif;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 13px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.phil-btn-ghost:hover { background: var(--panel2); border-color: var(--gold); }
+
+/* ── PROGRESS ── */
+.phil-prog {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+.phil-prog .lab {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  color: var(--gold);
+}
+.phil-prog .bar {
+  flex: 1;
+  height: 2px;
+  background: var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.phil-prog .fill {
+  height: 100%;
+  background: linear-gradient(to right, var(--gold), var(--gold2));
+  transition: width 0.4s;
+}
+.phil-prog .num {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px;
+  color: var(--parch);
+}
+
+/* ── QUESTION CARD ── */
+.phil-axbadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #1a1610;
+  padding: 4px 12px;
+  border-radius: 20px;
+  margin-bottom: 18px;
+}
+
+.phil-qcard {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 30px 24px;
+  position: relative;
+}
+
+.phil-qnum {
+  position: absolute;
+  top: 12px;
+  right: 20px;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 58px;
+  color: var(--panel2);
+  line-height: 1;
+  user-select: none;
+}
+
+.phil-qtext {
+  font-size: 17px;
+  line-height: 1.8;
+  position: relative;
+  z-index: 1;
+  min-height: 84px;
+  color: var(--parch);
+}
+
+.phil-opts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.phil-opt {
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 14px 4px;
+  text-align: center;
+  cursor: pointer;
+  transition: 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+}
+.phil-opt .v {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--parch);
+}
+.phil-opt .t {
+  font-size: 9.5px;
+  color: var(--muted);
+}
+.phil-opt:hover {
+  border-color: var(--gold);
+  transform: translateY(-2px);
+}
+.phil-opt.sel {
+  border-color: currentColor;
+  color: #fff;
+}
+.phil-opt.sel .t { color: rgba(255,255,255,.85); }
+
+.phil-nav {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+.phil-nav button {
+  flex: 1;
+  padding: 13px;
+  border-radius: 4px;
+  font-family: 'Noto Serif KR', serif;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+.phil-nav .p {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--parch);
+}
+.phil-nav .n {
+  background: var(--gold);
+  border: none;
+  color: #1a1610;
+  flex: 1.6;
+}
+.phil-nav button:disabled { opacity: 0.35; pointer-events: none; }
+
+/* ── RESULT ── */
+.phil-eyer {
+  text-align: center;
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  color: var(--gold);
+  font-size: 14px;
+  letter-spacing: 1px;
+  margin-bottom: 14px;
+}
+
+.phil-rcard {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.phil-hero {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  background: #0f0e17;
+}
+
+.phil-hero .scene {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.phil-hero .portrait {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 62%;
+  width: auto;
+  filter: drop-shadow(0 8px 24px rgba(0,0,0,.7));
+}
+
+.phil-hero .badge-region {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  background: rgba(20,19,15,.75);
+  border: 1px solid rgba(200,164,77,.3);
+  color: var(--gold);
+  padding: 5px 10px;
+  border-radius: 20px;
+}
+
+.phil-hero .badge-code {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  background: rgba(20,19,15,.75);
+  border: 1px solid rgba(200,164,77,.3);
+  color: var(--parch);
+  padding: 5px 10px;
+  border-radius: 20px;
+}
+
+.phil-rinfo {
+  padding: 28px 24px;
+}
+
+.phil-rinfo .type-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 6px;
+}
+
+.phil-rinfo .phil-name {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: 38px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--parch);
+}
+
+.phil-rinfo .phil-kr {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 3px 0 18px;
+}
+
+.phil-quote-block {
+  border-left: 3px solid var(--gold);
+  padding-left: 16px;
+  margin: 0 0 18px;
+}
+
+.phil-quote-block blockquote {
+  font-family: 'Gowun Batang', 'Noto Serif KR', serif;
+  font-size: 16px;
+  line-height: 1.8;
+  color: var(--parch);
+}
+
+.phil-quote-block .src {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.phil-desc-text {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.7;
+  margin-bottom: 24px;
+}
+
+/* ── SCORE BARS ── */
+.phil-scores {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px 24px;
+  border-top: 1px solid var(--line);
+}
+
+.phil-score-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.phil-score-row .label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 2px;
+  width: 12px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.phil-score-row .track {
+  flex: 1;
+  height: 4px;
+  background: var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.phil-score-row .fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.8s ease;
+}
+
+.phil-score-row .val {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  width: 30px;
+  text-align: right;
+}
+
+/* ── GALLERY ── */
+.phil-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 20px;
+}
+
+@media (max-width: 480px) {
+  .phil-gallery-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.phil-gallery-item {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: 0.15s;
+  position: relative;
+}
+.phil-gallery-item:hover {
+  border-color: var(--gold);
+  transform: translateY(-2px);
+}
+.phil-gallery-item.mine {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(200,164,77,.3);
+}
+
+.phil-gallery-item .thumb {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: #0f0e17;
+  overflow: hidden;
+}
+.phil-gallery-item .thumb svg.scene-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.phil-gallery-item .thumb svg.portrait-svg {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 62%;
+  width: auto;
+}
+
+.phil-gallery-item .info {
+  padding: 8px 10px 10px;
+}
+.phil-gallery-item .info .en-name {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: 15px;
+  color: var(--parch);
+}
+.phil-gallery-item .info .ko-type {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.phil-mine-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: var(--gold);
+  color: #1a1610;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 2px 7px;
+  border-radius: 20px;
+}
