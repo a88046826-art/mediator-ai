@@ -521,6 +521,51 @@
   }
   .toast.show { transform: translateY(0); }
 
+  /* ===== VOICE ===== */
+  .mic-btn {
+    width: 44px; height: 44px; border-radius: 12px; border: none;
+    cursor: pointer; font-size: 1.2rem; flex-shrink: 0;
+    transition: all 0.2s; display: flex; align-items: center; justify-content: center;
+  }
+  .mic-btn.idle {
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+  .mic-btn.idle:hover { border-color: rgba(124,58,237,0.5); color: #a78bfa; }
+  .mic-btn.recording {
+    background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.5);
+    color: #ef4444; animation: micPulse 1.5s infinite;
+  }
+  @keyframes micPulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.3); }
+    50% { box-shadow: 0 0 0 6px rgba(239,68,68,0); }
+  }
+  .voice-status {
+    display: none; align-items: center; gap: 8px;
+    padding: 8px 14px; font-size: 0.8rem; color: #ef4444;
+    border-top: 1px solid var(--border); background: rgba(239,68,68,0.05);
+  }
+  .voice-status.show { display: flex; }
+  .rec-dot {
+    width: 7px; height: 7px; border-radius: 50%; background: #ef4444;
+    animation: recBlink 1s infinite; flex-shrink: 0;
+  }
+  @keyframes recBlink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+  .waveform {
+    display: flex; align-items: center; gap: 2px; height: 16px; margin-left: auto;
+  }
+  .wbar {
+    width: 3px; border-radius: 2px;
+    background: linear-gradient(to top, #7c3aed, #06b6d4);
+    animation: waveAnim 0.7s ease-in-out infinite;
+  }
+  .wbar:nth-child(1){height:4px;animation-delay:0s}
+  .wbar:nth-child(2){height:8px;animation-delay:0.1s}
+  .wbar:nth-child(3){height:14px;animation-delay:0.2s}
+  .wbar:nth-child(4){height:10px;animation-delay:0.3s}
+  .wbar:nth-child(5){height:6px;animation-delay:0.15s}
+  @keyframes waveAnim { 0%,100%{transform:scaleY(0.4)} 50%{transform:scaleY(1)} }
+
   /* ===== RESPONSIVE ===== */
   @media (max-width: 600px) {
     nav { padding: 12px 16px; }
@@ -782,7 +827,16 @@
         </div>
       </div>
       <div class="messages" id="messages"></div>
+      <div class="voice-status" id="voiceStatus">
+        <div class="rec-dot"></div>
+        <span id="voiceStatusText">녹음 중... 말씀해 주세요</span>
+        <div class="waveform">
+          <div class="wbar"></div><div class="wbar"></div><div class="wbar"></div>
+          <div class="wbar"></div><div class="wbar"></div>
+        </div>
+      </div>
       <div class="chat-input-area">
+        <button class="mic-btn idle" id="micBtn" onclick="toggleMic()" title="음성 입력">🎙️</button>
         <textarea class="chat-input" id="chatInput" placeholder="회의 내용을 입력하세요... (팀원 발언 or 상황 설명)" rows="1"></textarea>
         <button class="send-btn" onclick="sendMessage()">↑</button>
       </div>
@@ -1268,6 +1322,73 @@ function sendMessage() {
 document.getElementById('chatInput')?.addEventListener('keydown', function(e) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
+
+// ===== VOICE RECOGNITION =====
+let isRecording = false;
+let recognition = null;
+let voiceTranscript = '';
+
+function toggleMic() {
+  if (isRecording) stopMic();
+  else startMic();
+}
+
+function startMic() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    showToast('Chrome 브라우저에서만 음성 인식이 지원됩니다.');
+    return;
+  }
+  recognition = new SR();
+  recognition.lang = 'ko-KR';
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  voiceTranscript = document.getElementById('chatInput').value;
+
+  recognition.onstart = () => {
+    isRecording = true;
+    const btn = document.getElementById('micBtn');
+    btn.className = 'mic-btn recording';
+    btn.textContent = '⏹';
+    btn.title = '녹음 중지';
+    document.getElementById('voiceStatus').classList.add('show');
+  };
+
+  recognition.onresult = (e) => {
+    let interim = '', final = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) final += t;
+      else interim += t;
+    }
+    if (final) voiceTranscript += final + ' ';
+    document.getElementById('chatInput').value = voiceTranscript + interim;
+    document.getElementById('voiceStatusText').textContent = interim || '녹음 중... 말씀해 주세요';
+  };
+
+  recognition.onerror = (e) => {
+    if (e.error === 'not-allowed') showToast('마이크 권한을 허용해주세요.');
+    else if (e.error === 'no-speech') showToast('음성이 감지되지 않았어요.');
+    stopMic();
+  };
+
+  recognition.onend = () => {
+    if (isRecording) recognition.start();
+  };
+
+  recognition.start();
+}
+
+function stopMic() {
+  isRecording = false;
+  if (recognition) { recognition.onend = null; recognition.stop(); recognition = null; }
+  const btn = document.getElementById('micBtn');
+  btn.className = 'mic-btn idle';
+  btn.textContent = '🎙️';
+  btn.title = '음성 입력';
+  document.getElementById('voiceStatus').classList.remove('show');
+  if (voiceTranscript.trim()) showToast('✅ 음성이 텍스트로 변환됐어요!');
+}
 
 // ===== UTILS =====
 function showLoading(text = '로딩 중...') {
