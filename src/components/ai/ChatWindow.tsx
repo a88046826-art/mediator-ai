@@ -8,6 +8,13 @@ interface Props {
   isLoading: boolean;
 }
 
+function interventionStyle(content: string): string {
+  if (content.startsWith('⚡')) return 'bg-orange-500/10 border border-orange-500/40 text-slate-200';
+  if (content.startsWith('📌')) return 'bg-blue-500/10 border border-blue-500/40 text-slate-200';
+  if (content.startsWith('✅')) return 'bg-emerald-500/10 border border-emerald-500/40 text-slate-200';
+  return 'bg-surface2 border border-border text-slate-200';
+}
+
 export function ChatWindow({ messages, isLoading }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -28,12 +35,12 @@ export function ChatWindow({ messages, isLoading }: Props) {
             </div>
           )}
           <div
-            className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
+            className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
               msg.role === 'user'
                 ? 'bg-accent text-white rounded-tr-sm'
                 : msg.isAlert
                 ? 'bg-red-500/15 border border-red-500/30 text-red-300 rounded-tl-sm'
-                : 'bg-surface2 text-slate-200 border border-border rounded-tl-sm'
+                : `${interventionStyle(msg.content)} rounded-tl-sm`
             }`}
           >
             {msg.content}
