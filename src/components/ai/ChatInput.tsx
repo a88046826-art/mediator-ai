@@ -14,7 +14,7 @@ export function ChatInput({ onSend, disabled }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { showToast } = useToast();
 
-  const { isListening, volume, toggle } = useVoiceRecognition({
+  const { isListening, toggle } = useVoiceRecognition({
     onResult: (t) => setText((prev) => (prev ? `${prev} ${t}` : t)),
     onError: (err) => showToast(`음성 오류: ${err}`, 'error'),
   });
@@ -33,8 +33,6 @@ export function ChatInput({ onSend, disabled }: Props) {
     }
   };
 
-  const micScale = 1 + volume * 0.5;
-
   return (
     <div className="p-4 border-t border-border bg-surface">
       <div className="flex gap-2 items-end max-w-3xl mx-auto">
@@ -45,10 +43,9 @@ export function ChatInput({ onSend, disabled }: Props) {
           title={isListening ? '녹음 중지' : '음성 입력'}
           className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all ${
             isListening
-              ? 'bg-red-500 text-white animate-micPulse'
+              ? 'bg-red-500 text-white'
               : 'bg-surface2 border border-border text-slate-400 hover:border-accent/40 hover:text-accent'
           } disabled:opacity-40`}
-          style={{ transform: isListening ? `scale(${micScale})` : 'scale(1)' }}
         >
           {isListening ? (
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -96,13 +93,10 @@ export function ChatInput({ onSend, disabled }: Props) {
             <div
               key={i}
               className="w-0.5 bg-red-400 rounded-full animate-waveAnim"
-              style={{
-                height: `${8 + volume * 24}px`,
-                animationDelay: `${i * 0.1}s`,
-              }}
+              style={{ height: '16px', animationDelay: `${i * 0.12}s` }}
             />
           ))}
-          <span className="text-xs text-red-400 ml-2">녹음 중</span>
+          <span className="text-xs text-red-400 ml-2">녹음 중 · 말씀하세요</span>
         </div>
       )}
     </div>
