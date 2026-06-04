@@ -6,7 +6,6 @@ import { usePathname } from 'next/navigation';
 const links = [
   { href: '/', label: '홈' },
   { href: '/test', label: '진단' },
-  { href: '/philosopher', label: '철학자' },
   { href: '/team', label: '팀' },
   { href: '/ai', label: 'AI 중재' },
 ];
@@ -27,7 +26,7 @@ export function Nav() {
               key={l.href}
               href={l.href}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                pathname === l.href
+                (l.href === '/' ? pathname === '/' : pathname.startsWith(l.href))
                   ? 'bg-accent/20 text-accent'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
               }`}
