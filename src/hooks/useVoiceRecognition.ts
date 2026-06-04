@@ -42,7 +42,7 @@ export function useVoiceRecognition({ onResult, onError }: Options) {
 
     const rec = new SpeechRec();
     rec.lang = 'ko-KR';
-    rec.continuous = false;
+    rec.continuous = true;
     rec.interimResults = false;
     recRef.current = rec;
 
@@ -50,10 +50,12 @@ export function useVoiceRecognition({ onResult, onError }: Options) {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     rec.onresult = (e: any) => {
-      const transcript = Array.from(e.results as ArrayLike<SpeechRecognitionResult>)
-        .map((r) => r[0].transcript)
-        .join('');
-      onResultRef.current(transcript);
+      // e.resultIndex: index of the first NEW result this event
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) {
+          onResultRef.current(e.results[i][0].transcript);
+        }
+      }
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
