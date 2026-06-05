@@ -7,8 +7,16 @@ interface Options {
   onError?: (err: string) => void;
 }
 
+function checkSupport() {
+  if (typeof window === 'undefined') return false;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const w = window as any;
+  return !!(w.SpeechRecognition ?? w.webkitSpeechRecognition);
+}
+
 export function useVoiceRecognition({ onResult, onError }: Options) {
   const [isListening, setIsListening] = useState(false);
+  const [isSupported] = useState(checkSupport);
 
   const onResultRef = useRef(onResult);
   const onErrorRef = useRef(onError);
@@ -112,5 +120,5 @@ export function useVoiceRecognition({ onResult, onError }: Options) {
     isListeningRef.current ? stop() : start();
   }, [start, stop]);
 
-  return { isListening, toggle, stop };
+  return { isListening, isSupported, toggle, stop };
 }

@@ -134,7 +134,7 @@ export default function AiPage() {
     }
   }, [runAnalysis]);
 
-  const { isListening, toggle, stop } = useVoiceRecognition({
+  const { isListening, isSupported, toggle, stop } = useVoiceRecognition({
     onResult: handleVoiceResult,
     onError: (err) => showToast(`음성 오류: ${err}`, 'error'),
   });
@@ -197,6 +197,16 @@ export default function AiPage() {
       <div className="max-w-xl mx-auto px-4 py-10">
         <h1 className="text-2xl font-bold mb-2 text-center">AI 팀 중재자</h1>
         <p className="text-slate-400 text-sm mb-8 text-center">실시간 회의 분석 · 성향 기반 중재</p>
+        {!isSupported && (
+          <div className="mb-6 flex gap-3 rounded-xl border border-yellow-500/40 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-300">
+            <span className="mt-0.5 shrink-0">⚠️</span>
+            <span>
+              이 브라우저는 음성 인식을 지원하지 않아요.{' '}
+              <strong>Chrome</strong> 또는 <strong>Edge</strong>에서 접속해 주세요.
+              (Safari·Firefox는 미지원)
+            </span>
+          </div>
+        )}
         <MeetingSetup members={teamMembers} onStart={handleStart} />
       </div>
     );
