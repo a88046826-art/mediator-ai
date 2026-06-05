@@ -1,20 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? '');
 
 export async function POST(req: NextRequest) {
   try {
     const { system, messages, maxTokens } = await req.json();
 
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: maxTokens ?? 1024,
-      system,
-      messages,
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-1.5-flash',
+      systemInstruction: system,
     });
 
-    const content = response.content[0].type === 'text' ? response.content[0].text : '';
+    // messages format: [{ role: 'user', content: string }]
+    const userMessage = messages.find((m: { role: string }) => m.role === 'user')?.content ?? '';
+
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: userMessage }] }],
+      generationConfig: { maxOutputTokens: maxTokens ?? 1024 },
+    });
+
+    const content = result.response.text();
     return NextResponse.json({ content });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
