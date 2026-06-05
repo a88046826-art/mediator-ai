@@ -81,6 +81,8 @@ export default function AiPage() {
   const isAnalyzingRef = useRef(false);
   const meetingContextRef = useRef('');
   meetingContextRef.current = meetingContext;
+  // transcriptRef stays in sync so handleVoiceResult never captures stale state
+  const transcriptRef = useRef<TranscriptEntry[]>([]);
 
   const teamSummary = teamMembers
     .map((m) => `${m.name}(${m.code}·${codeInfo[m.code].label})`)
@@ -121,14 +123,15 @@ export default function AiPage() {
     const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     const entry: TranscriptEntry = { id: Date.now().toString(), text, time };
 
-    setTranscript((prev) => {
-      const next = [...prev, entry];
-      if (next.length - lastAnalyzedCountRef.current >= 3) {
-        lastAnalyzedCountRef.current = next.length;
-        runAnalysis(next);
-      }
-      return next;
-    });
+    // Update ref first, then state — avoids side-effects inside setState updater
+    const next = [...transcriptRef.current, entry];
+    transcriptRef.current = next;
+    setTranscript(next);
+
+    if (next.length - lastAnalyzedCountRef.current >= 3) {
+      lastAnalyzedCountRef.current = next.length;
+      runAnalysis(next);
+    }
   }, [runAnalysis]);
 
   const { isListening, toggle, stop } = useVoiceRecognition({
@@ -155,7 +158,7 @@ export default function AiPage() {
     isAnalyzingRef.current = true;
     setIsAnalyzing(true);
     try {
-      const entries = transcript;
+      const entries = transcriptRef.current;
       const transcriptText = entries.length > 0
         ? entries.map((e) => `[${e.time}] ${e.text}`).join('\n')
         : '(아직 대화 내용 없음)';
@@ -183,6 +186,7 @@ export default function AiPage() {
     stop();
     clearMessages();
     setTranscript([]);
+    transcriptRef.current = [];
     lastAnalyzedCountRef.current = 0;
     setPhase('setup');
   };
