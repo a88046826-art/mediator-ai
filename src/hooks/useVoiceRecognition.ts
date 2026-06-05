@@ -32,6 +32,8 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
   const recRef = useRef<any>(null);
   const userStoppedRef = useRef(false);
   const isListeningRef = useRef(false);
+  // session ID prevents stale onresult from a previous session firing after restart
+  const sessionIdRef = useRef(0);
 
   const createAndStart = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -45,23 +47,31 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
       recRef.current = null;
     }
 
+    const mySession = ++sessionIdRef.current;
+
     const rec = new SpeechRec();
     rec.lang = 'ko-KR';
-    rec.continuous = true;
+    // continuous: false — one utterance per session, then onend fires cleanly.
+    // We restart manually in onend to get continuous-like behavior without
+    // Chrome's result-accumulation bug that causes duplicates.
+    rec.continuous = false;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
     recRef.current = rec;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     rec.onresult = (e: any) => {
+      // discard results from a session that was already replaced
+      if (mySession !== sessionIdRef.current) return;
+
       let interimText = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const result = e.results[i];
-        const transcript = result[0].transcript;
+        const transcript = result[0].transcript.trim();
+        if (!transcript) continue;
         const confidence = result[0].confidence;
 
         if (result.isFinal) {
-          // confidence is 0 on some browsers (Firefox) — treat 0 as passing
           if (confidence === 0 || confidence >= MIN_CONFIDENCE) {
             onResultRef.current(transcript);
           }
@@ -77,6 +87,7 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     rec.onerror = (e: any) => {
+      if (mySession !== sessionIdRef.current) return;
       if (e.error === 'no-speech') return;
       const msg =
         e.error === 'not-allowed' ? '마이크 권한을 허용해 주세요.' :
@@ -86,10 +97,10 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
     };
 
     rec.onend = () => {
+      if (mySession !== sessionIdRef.current) return;
       recRef.current = null;
       onInterimRef.current?.('');
       if (!userStoppedRef.current && isListeningRef.current) {
-        // restart immediately — any delay causes audible gap
         createAndStart();
       } else {
         isListeningRef.current = false;
