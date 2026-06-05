@@ -153,7 +153,7 @@ export default function AiPage() {
     addMessage({
       id: Date.now().toString(),
       role: 'ai',
-      content: `회의를 시작합니다. 🎙\n\n${teamMembers.length > 0 ? `팀 구성: ${teamSummary}\n` : ''}${context ? `주제: ${context}\n` : ''}\n마이크를 켜고 대화를 시작하세요. 3문장마다 자동으로 분석하고, 갈등·핵심 발언·진행 소감을 알려드립니다.`,
+      content: `회의를 시작합니다. 🎙\n\n${teamMembers.length > 0 ? `팀 구성: ${teamSummary}\n` : ''}${context ? `주제: ${context}\n` : ''}\n마이크를 켜고 대화를 시작하세요. 갈등이나 중요한 결정이 감지되면 자동으로 중재 의견을 드립니다.`,
       timestamp: new Date().toISOString(),
     });
     setPhase('meeting');
