@@ -1,29 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
+import Anthropic from '@anthropic-ai/sdk';
 
 export async function POST(req: NextRequest) {
   try {
-    if (!process.env.GEMINI_API_KEY) {
-      return NextResponse.json({ error: 'GEMINI_API_KEY가 설정되지 않았습니다.' }, { status: 500 });
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return NextResponse.json({ error: 'ANTHROPIC_API_KEY가 설정되지 않았습니다.' }, { status: 500 });
     }
 
     const { system, messages, maxTokens } = await req.json();
     const userMessage = messages.find((m: { role: string }) => m.role === 'user')?.content ?? '';
-    const fullPrompt = system ? `${system}\n\n${userMessage}` : userMessage;
 
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: fullPrompt,
-      config: { maxOutputTokens: maxTokens ?? 1024 },
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: maxTokens ?? 1024,
+      system,
+      messages: [{ role: 'user', content: userMessage }],
     });
 
-    const content = response.text ?? '';
+    const content = response.content[0].type === 'text' ? response.content[0].text : '';
     return NextResponse.json({ content });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[chat/route] Gemini API error:', message);
+    console.error('[chat/route] Anthropic API error:', message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
