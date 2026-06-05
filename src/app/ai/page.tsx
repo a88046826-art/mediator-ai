@@ -182,6 +182,32 @@ export default function AiPage() {
     }
   };
 
+  const handleCopy = async () => {
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+    const lines: string[] = [
+      '[ 회의 기록 ]',
+      `날짜: ${dateStr} ${timeStr}`,
+      meetingContextRef.current ? `주제: ${meetingContextRef.current}` : '',
+      teamSummaryRef.current ? `팀 구성: ${teamSummaryRef.current}` : '',
+      '',
+      '━━━ 대화 기록 ━━━',
+      ...transcriptRef.current.map((e) => `[${e.time}] ${e.text}`),
+      '',
+      '━━━ AI 중재 내용 ━━━',
+      ...messages.filter((m) => m.role === 'ai').map((m, i) => `[${i+1}] ${m.content}`),
+    ].filter(Boolean);
+
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      showToast('클립보드에 복사됐어요!', 'success');
+    } catch {
+      showToast('복사 실패. 내보내기를 사용해 주세요.', 'error');
+    }
+  };
+
   const handleExport = () => {
     const now = new Date();
     const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
@@ -308,6 +334,7 @@ export default function AiPage() {
         isAnalyzing={isAnalyzing}
         onToggleMic={toggle}
         onManualAsk={handleManualAsk}
+        onCopy={handleCopy}
         onExport={handleExport}
         onEnd={handleEnd}
       />
