@@ -1,29 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
 
 export async function POST(req: NextRequest) {
   try {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return NextResponse.json({ error: 'ANTHROPIC_API_KEY가 설정되지 않았습니다.' }, { status: 500 });
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({ error: 'GEMINI_API_KEY가 설정되지 않았습니다.' }, { status: 500 });
     }
 
     const { system, messages, maxTokens } = await req.json();
     const userMessage = messages.find((m: { role: string }) => m.role === 'user')?.content ?? '';
+    const fullPrompt = system ? `${system}\n\n${userMessage}` : userMessage;
 
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: fullPrompt }] }],
+          generationConfig: { maxOutputTokens: maxTokens ?? 1024 },
+        }),
+      }
+    );
 
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: maxTokens ?? 1024,
-      system,
-      messages: [{ role: 'user', content: userMessage }],
-    });
+    const data = await res.json();
+    if (!res.ok) {
+      const errMsg = data?.error?.message ?? `Gemini error ${res.status}`;
+      return NextResponse.json({ error: errMsg }, { status: 500 });
+    }
 
-    const content = response.content[0].type === 'text' ? response.content[0].text : '';
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
     return NextResponse.json({ content });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[chat/route] Anthropic API error:', message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
