@@ -59,8 +59,8 @@ async function callApi(system: string, userContent: string, maxTokens = 1024): P
       maxTokens,
     }),
   });
-  if (!res.ok) throw new Error(`API error ${res.status}`);
   const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? `API error ${res.status}`);
   return data.content as string;
 }
 
@@ -180,8 +180,9 @@ export default function AiPage() {
         timestamp: new Date().toISOString(),
       });
       setActiveTab('ai');
-    } catch {
-      showToast('AI 응답 실패. 잠시 후 다시 시도해주세요.', 'error');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      showToast(`AI 오류: ${msg}`, 'error');
     } finally {
       isAnalyzingRef.current = false;
       setIsAnalyzing(false);
