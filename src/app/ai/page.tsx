@@ -182,6 +182,33 @@ export default function AiPage() {
     }
   };
 
+  const handleExport = () => {
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+    const lines: string[] = [
+      '[ 회의 기록 ]',
+      `날짜: ${dateStr} ${timeStr}`,
+      meetingContext ? `주제: ${meetingContext}` : '',
+      teamSummary ? `팀 구성: ${teamSummary}` : '',
+      '',
+      '━━━ 대화 기록 ━━━',
+      ...transcriptRef.current.map((e) => `[${e.time}] ${e.text}`),
+      '',
+      '━━━ AI 중재 내용 ━━━',
+      ...messages.filter((m) => m.role === 'ai').map((m, i) => `[${i+1}] ${m.content}`),
+    ].filter((l) => l !== undefined);
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `회의기록_${dateStr}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleEnd = () => {
     stop();
     clearMessages();
@@ -281,6 +308,7 @@ export default function AiPage() {
         isAnalyzing={isAnalyzing}
         onToggleMic={toggle}
         onManualAsk={handleManualAsk}
+        onExport={handleExport}
         onEnd={handleEnd}
       />
     </div>

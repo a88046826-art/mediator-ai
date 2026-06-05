@@ -5,10 +5,11 @@ interface Props {
   isAnalyzing: boolean;
   onToggleMic: () => void;
   onManualAsk: () => void;
+  onExport: () => void;
   onEnd: () => void;
 }
 
-export function MeetingControls({ isRecording, isAnalyzing, onToggleMic, onManualAsk, onEnd }: Props) {
+export function MeetingControls({ isRecording, isAnalyzing, onToggleMic, onManualAsk, onExport, onEnd }: Props) {
   return (
     <div className="shrink-0 border-t border-border bg-surface px-4 py-3">
       <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
@@ -69,6 +70,17 @@ export function MeetingControls({ isRecording, isAnalyzing, onToggleMic, onManua
               <span>AI에게 묻기</span>
             </>
           )}
+        </button>
+
+        {/* 내보내기 */}
+        <button
+          onClick={onExport}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm bg-surface2 border border-border text-slate-400 hover:border-accent/40 hover:text-accent transition-all"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+          </svg>
+          <span className="hidden sm:inline">내보내기</span>
         </button>
 
         {/* 회의 종료 */}
