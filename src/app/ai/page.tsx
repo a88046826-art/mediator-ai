@@ -74,6 +74,7 @@ export default function AiPage() {
   const [phase, setPhase] = useState<Phase>('setup');
   const [meetingContext, setMeetingContext] = useState('');
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
+  const [interimText, setInterimText] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>('transcript');
 
@@ -136,6 +137,7 @@ export default function AiPage() {
 
   const { isListening, isSupported, toggle, stop } = useVoiceRecognition({
     onResult: handleVoiceResult,
+    onInterim: setInterimText,
     onError: (err) => showToast(`음성 오류: ${err}`, 'error'),
   });
 
@@ -239,6 +241,7 @@ export default function AiPage() {
     stop();
     clearMessages();
     setTranscript([]);
+    setInterimText('');
     transcriptRef.current = [];
     lastAnalyzedCountRef.current = 0;
     setPhase('setup');
@@ -316,7 +319,7 @@ export default function AiPage() {
           <div className="shrink-0 px-4 pt-3 pb-2 border-b border-border/40">
             <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">대화 기록</p>
           </div>
-          <LiveTranscript entries={transcript} />
+          <LiveTranscript entries={transcript} interimText={interimText} />
         </div>
 
         {/* right: AI interventions */}

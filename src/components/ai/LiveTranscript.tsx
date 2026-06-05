@@ -10,16 +10,17 @@ export interface TranscriptEntry {
 
 interface Props {
   entries: TranscriptEntry[];
+  interimText?: string;
 }
 
-export function LiveTranscript({ entries }: Props) {
+export function LiveTranscript({ entries, interimText }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [entries]);
+  }, [entries, interimText]);
 
-  if (entries.length === 0) {
+  if (entries.length === 0 && !interimText) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center px-6 gap-3">
         <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center text-2xl">
@@ -39,6 +40,12 @@ export function LiveTranscript({ entries }: Props) {
           <p className="text-sm text-slate-300 leading-relaxed">{e.text}</p>
         </div>
       ))}
+      {interimText && (
+        <div className="flex gap-2 items-start">
+          <span className="text-[10px] font-mono text-slate-700 mt-1 shrink-0 w-10">…</span>
+          <p className="text-sm text-slate-500 leading-relaxed italic">{interimText}</p>
+        </div>
+      )}
       <div ref={bottomRef} />
     </div>
   );

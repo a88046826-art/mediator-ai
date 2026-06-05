@@ -4,6 +4,7 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 
 interface Options {
   onResult: (text: string) => void;
+  onInterim?: (text: string) => void;
   onError?: (err: string) => void;
 }
 
@@ -14,18 +15,21 @@ function checkSupport() {
   return !!(w.SpeechRecognition ?? w.webkitSpeechRecognition);
 }
 
-export function useVoiceRecognition({ onResult, onError }: Options) {
+const MIN_CONFIDENCE = 0.4;
+
+export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
   const [isListening, setIsListening] = useState(false);
   const [isSupported] = useState(checkSupport);
 
   const onResultRef = useRef(onResult);
+  const onInterimRef = useRef(onInterim);
   const onErrorRef = useRef(onError);
   useEffect(() => { onResultRef.current = onResult; }, [onResult]);
+  useEffect(() => { onInterimRef.current = onInterim; }, [onInterim]);
   useEffect(() => { onErrorRef.current = onError; }, [onError]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recRef = useRef<any>(null);
-  // true = user pressed stop; false = Chrome interrupted (should auto-restart)
   const userStoppedRef = useRef(false);
   const isListeningRef = useRef(false);
 
@@ -44,21 +48,35 @@ export function useVoiceRecognition({ onResult, onError }: Options) {
     const rec = new SpeechRec();
     rec.lang = 'ko-KR';
     rec.continuous = true;
-    rec.interimResults = false;
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
     recRef.current = rec;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     rec.onresult = (e: any) => {
+      let interimText = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) {
-          onResultRef.current(e.results[i][0].transcript);
+        const result = e.results[i];
+        const transcript = result[0].transcript;
+        const confidence = result[0].confidence;
+
+        if (result.isFinal) {
+          // confidence is 0 on some browsers (Firefox) — treat 0 as passing
+          if (confidence === 0 || confidence >= MIN_CONFIDENCE) {
+            onResultRef.current(transcript);
+          }
+          onInterimRef.current?.('');
+        } else {
+          interimText += transcript;
         }
+      }
+      if (interimText) {
+        onInterimRef.current?.(interimText);
       }
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     rec.onerror = (e: any) => {
-      // 'no-speech' is Chrome's timeout — not a real error, just restart
       if (e.error === 'no-speech') return;
       const msg =
         e.error === 'not-allowed' ? '마이크 권한을 허용해 주세요.' :
@@ -69,9 +87,10 @@ export function useVoiceRecognition({ onResult, onError }: Options) {
 
     rec.onend = () => {
       recRef.current = null;
-      // Chrome killed the session — restart unless user explicitly stopped
+      onInterimRef.current?.('');
       if (!userStoppedRef.current && isListeningRef.current) {
-        setTimeout(createAndStart, 100);
+        // restart immediately — any delay causes audible gap
+        createAndStart();
       } else {
         isListeningRef.current = false;
         setIsListening(false);
@@ -112,6 +131,7 @@ export function useVoiceRecognition({ onResult, onError }: Options) {
     userStoppedRef.current = true;
     isListeningRef.current = false;
     setIsListening(false);
+    onInterimRef.current?.('');
     try { recRef.current?.stop(); } catch { /* ignore */ }
     recRef.current = null;
   }, []);
