@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,15 +11,15 @@ export async function POST(req: NextRequest) {
     const userMessage = messages.find((m: { role: string }) => m.role === 'user')?.content ?? '';
     const fullPrompt = system ? `${system}\n\n${userMessage}` : userMessage;
 
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-8b' });
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
-      generationConfig: { maxOutputTokens: maxTokens ?? 1024 },
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: fullPrompt,
+      config: { maxOutputTokens: maxTokens ?? 1024 },
     });
 
-    const content = result.response.text();
+    const content = response.text ?? '';
     return NextResponse.json({ content });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
