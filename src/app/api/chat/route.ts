@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     const fullPrompt = system ? `${system}\n\n${userMessage}` : userMessage;
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-8b' });
 
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
