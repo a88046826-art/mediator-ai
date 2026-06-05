@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? '');
-
 export async function POST(req: NextRequest) {
   try {
     if (!process.env.GEMINI_API_KEY) {
@@ -11,10 +9,9 @@ export async function POST(req: NextRequest) {
 
     const { system, messages, maxTokens } = await req.json();
     const userMessage = messages.find((m: { role: string }) => m.role === 'user')?.content ?? '';
-
-    // Combine system prompt + user message for maximum compatibility
     const fullPrompt = system ? `${system}\n\n${userMessage}` : userMessage;
 
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     const result = await model.generateContent({
