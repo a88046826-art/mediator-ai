@@ -40,13 +40,13 @@ function buildAutoPrompt(teamSummary: string, context: string, transcriptText: s
 아래는 지금까지의 실시간 대화 내용입니다:
 ${transcriptText}
 
-위 대화를 분석해서 다음 중 하나만 반환하세요:
-- 갈등/긴장이 감지되면: "⚡ 갈등 감지\n[중재 메시지]"
-- 중요 결정이나 핵심 발언이면: "📌 핵심 발언\n[요약]"
-- 회의 흐름이 좋으면: "✅ 진행 소감\n[짧은 피드백]"
-- 특이사항 없으면: "SKIP"
+아래 기준에 따라 판단하세요:
+- 갈등/긴장/감정적 마찰이 명확히 감지되면: "⚡ 갈등 감지\n[중재 메시지]"
+- 팀 전체에 영향을 미치는 중요 결정이 내려지고 있으면: "📌 핵심 결정\n[요약]"
+- 위 두 경우가 아니면: 반드시 "SKIP"만 반환
 
-답변은 2-3문장 이내로 간결하게. 한국어로.`;
+SKIP 기준: 일반적인 의견 교환, 정보 공유, 부드러운 토론은 모두 SKIP.
+개입은 꼭 필요한 순간에만. 답변은 2-3문장 이내. 한국어로.`;
 }
 
 async function callApi(system: string, userContent: string, maxTokens = 1024): Promise<string> {
@@ -124,12 +124,16 @@ export default function AiPage() {
     const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     const entry: TranscriptEntry = { id: Date.now().toString(), text, time };
 
-    // Update ref first, then state — avoids side-effects inside setState updater
     const next = [...transcriptRef.current, entry];
     transcriptRef.current = next;
     setTranscript(next);
 
-    if (next.length - lastAnalyzedCountRef.current >= 3) {
+    const CONFLICT_KEYWORDS = ['아니', '반대', '문제', '이상해', '틀려', '아닌데', '아닌것', '왜 그래', '말이 안', '이해가 안', '화나', '짜증', '싫어', '못 하겠', '모르겠어', '다르게', '반드시', '절대'];
+    const hasConflict = CONFLICT_KEYWORDS.some((kw) => text.includes(kw));
+
+    // 갈등 키워드 감지 시 즉시 분석, 그 외엔 5문장마다
+    const threshold = hasConflict ? 0 : 5;
+    if (hasConflict || next.length - lastAnalyzedCountRef.current >= threshold) {
       lastAnalyzedCountRef.current = next.length;
       runAnalysis(next);
     }
