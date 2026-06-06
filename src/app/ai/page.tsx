@@ -3,7 +3,8 @@
 import { useState, useRef, useCallback } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import type { Message } from '@/types';
-import { codeInfo } from '@/data/typeData';
+import { codeInfo, typeData } from '@/data/typeData';
+import type { CodeType } from '@/types';
 import { MeetingSetup } from '@/components/ai/MeetingSetup';
 import { ChatWindow } from '@/components/ai/ChatWindow';
 import { LiveTranscript, type TranscriptEntry, COLOR_PALETTE } from '@/components/ai/LiveTranscript';
@@ -19,14 +20,15 @@ function buildSystemPrompt(context: string, teamSummary: string): string {
 팀 구성: ${teamSummary || '등록된 팀원 없음'}
 오늘 회의 주제: ${context || '없음'}
 
-CODE 프레임워크:
-- D (Disruptor): 빠른 실행, 결단력 강함, 리스크 감수
-- O (Outreacher): 비전 제시, 동기부여, 외부 네트워킹
-- C (Coordinator): 팀 조율, 투명 소통, 갈등 중재
-- E (Evaluator): 데이터 분석, 리스크 평가, 체계적 사고
+CODE 프레임워크 (주 성향 기반):
+- D (Disruptor): 빠른 실행, 결단력, 리스크 감수 → 직접적이고 단호한 언어로 소통
+- O (Outreacher): 비전 제시, 동기부여, 외부 네트워킹 → 가능성과 비전을 연결하는 방식으로
+- C (Coordinator): 팀 조율, 투명 소통, 갈등 중재 → 관계와 팀 분위기를 먼저 고려
+- E (Evaluator): 데이터 분석, 리스크 평가, 체계적 사고 → 근거와 데이터 중심으로 설득
+- 복합 유형(DC, OE 등)은 두 성향을 모두 가짐 — 주 성향을 우선, 부 성향도 고려
 
 역할:
-1. 갈등 상황을 각 성향 관점에서 분석한다.
+1. 각 팀원의 CODE 성향에 맞게 다른 언어와 접근법으로 중재한다.
 2. 구체적인 중재 스크립트(대화 예시)를 제안한다.
 3. 팀이 결론에 도달하도록 다음 액션을 안내한다.
 4. 답변은 간결하고 실용적으로, 한국어로 작성한다.`;
@@ -89,7 +91,10 @@ export default function AiPage() {
   const transcriptRef = useRef<TranscriptEntry[]>([]);
 
   const teamSummary = teamMembers
-    .map((m) => `${m.name}(${m.code}·${codeInfo[m.code].label})`)
+    .map((m) => {
+      const typeName = typeData[m.code]?.name ?? codeInfo[m.code[0] as CodeType]?.label ?? m.code;
+      return `${m.name}(${m.code}·${typeName})`;
+    })
     .join(', ');
   const teamSummaryRef = useRef('');
   teamSummaryRef.current = teamSummary;
@@ -336,7 +341,7 @@ export default function AiPage() {
                   : 'text-slate-500 hover:text-slate-300'
               }`}
             >
-              {m.name}
+              {m.name}<span className="opacity-60 ml-1">{m.code}</span>
             </button>
           ))}
         </div>

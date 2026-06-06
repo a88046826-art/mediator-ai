@@ -22,7 +22,7 @@ export function TeamRadarChart({ members }: Props) {
       Chart.register(RadarController, RadialLinearScale, PointElement, LineElement, Filler, Tooltip);
 
       const counts = CODES.reduce((acc, c) => {
-        acc[c] = members.filter((m) => m.code === c).length;
+        acc[c] = members.filter((m) => m.code[0] === c).length;
         return acc;
       }, {} as Record<CodeType, number>);
 

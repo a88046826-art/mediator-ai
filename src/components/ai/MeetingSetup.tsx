@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { TeamMember } from '@/types';
+import type { CodeType } from '@/types';
 import { codeInfo } from '@/data/typeData';
 
 interface Props {
@@ -20,19 +21,22 @@ export function MeetingSetup({ members, onStart }: Props) {
         <div className="mb-4">
           <p className="text-xs text-slate-500 mb-2">등록된 팀원</p>
           <div className="flex flex-wrap gap-2">
-            {members.map((m) => (
-              <span
-                key={m.id}
-                className="px-2.5 py-1 rounded-full text-xs font-medium"
-                style={{
-                  backgroundColor: `${codeInfo[m.code].color}15`,
-                  color: codeInfo[m.code].color,
-                  border: `1px solid ${codeInfo[m.code].color}30`,
-                }}
-              >
-                {m.name} ({m.code})
-              </span>
-            ))}
+            {members.map((m) => {
+              const info = codeInfo[(m.code[0] as CodeType)] ?? codeInfo['D'];
+              return (
+                <span
+                  key={m.id}
+                  className="px-2.5 py-1 rounded-full text-xs font-medium"
+                  style={{
+                    backgroundColor: `${info.color}15`,
+                    color: info.color,
+                    border: `1px solid ${info.color}30`,
+                  }}
+                >
+                  {m.name} · {m.code}
+                </span>
+              );
+            })}
           </div>
         </div>
       )}

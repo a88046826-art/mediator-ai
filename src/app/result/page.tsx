@@ -32,7 +32,7 @@ export default function ResultPage() {
 
   const handleConfirm = () => {
     if (!name.trim()) return;
-    addTeamMember({ id: Date.now().toString(), name: name.trim(), code: result.primary });
+    addTeamMember({ id: Date.now().toString(), name: name.trim(), code: result.typeKey });
     showToast(`${name.trim()} 팀에 추가됨!`, 'success');
     setModalOpen(false);
   };

@@ -1,6 +1,6 @@
 'use client';
 
-import type { TeamMember } from '@/types';
+import type { TeamMember, CodeType } from '@/types';
 import { codeInfo } from '@/data/typeData';
 
 interface Props {
@@ -9,7 +9,7 @@ interface Props {
 }
 
 export function MemberRow({ member, onRemove }: Props) {
-  const info = codeInfo[member.code];
+  const info = codeInfo[member.code[0] as CodeType] ?? codeInfo['D'];
   return (
     <div className="flex items-center gap-3 px-4 py-3 bg-surface2 rounded-xl border border-border">
       <div
@@ -20,7 +20,7 @@ export function MemberRow({ member, onRemove }: Props) {
       </div>
       <div className="flex-1 min-w-0">
         <p className="font-medium text-slate-200 truncate">{member.name}</p>
-        <p className="text-xs text-slate-500">{info.label}</p>
+        <p className="text-xs text-slate-500">{member.code} · {info.label}</p>
       </div>
       <button
         onClick={() => onRemove(member.id)}

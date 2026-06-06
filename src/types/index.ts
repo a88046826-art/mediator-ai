@@ -18,7 +18,7 @@ export interface TypeResult {
 export interface TeamMember {
   id: string;
   name: string;
-  code: CodeType;
+  code: string; // single (D) or combined (DC, OE, etc.)
 }
 
 export interface TestResult {
