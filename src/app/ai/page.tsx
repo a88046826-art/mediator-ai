@@ -6,7 +6,7 @@ import type { Message } from '@/types';
 import { codeInfo } from '@/data/typeData';
 import { MeetingSetup } from '@/components/ai/MeetingSetup';
 import { ChatWindow } from '@/components/ai/ChatWindow';
-import { LiveTranscript, type TranscriptEntry } from '@/components/ai/LiveTranscript';
+import { LiveTranscript, type TranscriptEntry, COLOR_PALETTE } from '@/components/ai/LiveTranscript';
 import { MeetingControls } from '@/components/ai/MeetingControls';
 import { useVoiceRecognition } from '@/hooks/useVoiceRecognition';
 
@@ -77,6 +77,9 @@ export default function AiPage() {
   const [interimText, setInterimText] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>('transcript');
+  const [currentSpeaker, setCurrentSpeaker] = useState('');
+  const currentSpeakerRef = useRef('');
+  currentSpeakerRef.current = currentSpeaker;
 
   const lastAnalyzedCountRef = useRef(0);
   const isAnalyzingRef = useRef(false);
@@ -96,7 +99,7 @@ export default function AiPage() {
     isAnalyzingRef.current = true;
     setIsAnalyzing(true);
     try {
-      const transcriptText = entries.map((e) => `[${e.time}] ${e.text}`).join('\n');
+      const transcriptText = entries.map((e) => `[${e.time}] ${e.speaker ? `${e.speaker}: ` : ''}${e.text}`).join('\n');
       const result = await callApi(
         buildAutoPrompt(teamSummaryRef.current, meetingContextRef.current, transcriptText),
         '위 대화를 분석해주세요.',
@@ -122,7 +125,12 @@ export default function AiPage() {
   const handleVoiceResult = useCallback((text: string) => {
     const now = new Date();
     const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const entry: TranscriptEntry = { id: Date.now().toString(), text, time };
+    const entry: TranscriptEntry = {
+      id: Date.now().toString(),
+      text,
+      time,
+      speaker: currentSpeakerRef.current || undefined,
+    };
 
     const next = [...transcriptRef.current, entry];
     transcriptRef.current = next;
@@ -247,6 +255,7 @@ export default function AiPage() {
     clearMessages();
     setTranscript([]);
     setInterimText('');
+    setCurrentSpeaker('');
     transcriptRef.current = [];
     lastAnalyzedCountRef.current = 0;
     setPhase('setup');
@@ -274,6 +283,11 @@ export default function AiPage() {
   }
 
   // ── MEETING ROOM ──
+  const speakerColors: Record<string, string> = {};
+  teamMembers.forEach((m, i) => {
+    speakerColors[m.name] = COLOR_PALETTE[i % COLOR_PALETTE.length];
+  });
+
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 4rem)' }}>
 
@@ -300,6 +314,34 @@ export default function AiPage() {
         )}
       </div>
 
+      {/* speaker selector */}
+      {teamMembers.length > 0 && (
+        <div className="shrink-0 flex items-center gap-2 px-4 py-2 border-b border-border/50 bg-surface overflow-x-auto">
+          <span className="text-[10px] text-slate-600 shrink-0">발화자</span>
+          <button
+            onClick={() => setCurrentSpeaker('')}
+            className={`shrink-0 px-2.5 py-1 rounded-full text-xs transition-colors ${
+              currentSpeaker === '' ? 'bg-slate-600 text-slate-200' : 'text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            없음
+          </button>
+          {teamMembers.map((m, i) => (
+            <button
+              key={m.id}
+              onClick={() => setCurrentSpeaker(m.name)}
+              className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                currentSpeaker === m.name
+                  ? `${COLOR_PALETTE[i % COLOR_PALETTE.length]} bg-white/10`
+                  : 'text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              {m.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* mobile tab bar */}
       <div className="sm:hidden shrink-0 flex border-b border-border bg-surface">
         {(['transcript', 'ai'] as ActiveTab[]).map((tab) => (
@@ -324,7 +366,7 @@ export default function AiPage() {
           <div className="shrink-0 px-4 pt-3 pb-2 border-b border-border/40">
             <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">대화 기록</p>
           </div>
-          <LiveTranscript entries={transcript} interimText={interimText} />
+          <LiveTranscript entries={transcript} interimText={interimText} speakerColors={speakerColors} />
         </div>
 
         {/* right: AI interventions */}
