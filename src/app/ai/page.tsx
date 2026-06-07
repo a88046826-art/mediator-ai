@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import type { Message } from '@/types';
 import { codeInfo, typeData } from '@/data/typeData';
+import { detectConflict, type ConflictCategory } from '@/data/conflictPatterns';
 import type { CodeType } from '@/types';
 import { MeetingSetup } from '@/components/ai/MeetingSetup';
 import { ChatWindow } from '@/components/ai/ChatWindow';
@@ -42,13 +43,37 @@ function buildAutoPrompt(teamSummary: string, context: string, transcriptText: s
 아래는 지금까지의 실시간 대화 내용입니다:
 ${transcriptText}
 
-아래 기준에 따라 판단하세요:
-- 갈등/긴장/감정적 마찰이 명확히 감지되면: "⚡ 갈등 감지\n[중재 메시지]"
-- 팀 전체에 영향을 미치는 중요 결정이 내려지고 있으면: "📌 핵심 결정\n[요약]"
-- 위 두 경우가 아니면: 반드시 "SKIP"만 반환
+아래 패턴이 감지되거나 중요 결정이 내려지면 개입하세요:
+🔴공격·적대 | 🟠수동공격 | 🟡회의구조파괴 | 🟢발산혼란 | 🔵책임회피
+🟣비교·경쟁 | ⚫에너지저하 | 🟤애매모호 | 🔶관계갈등 | 🟥자기중심
+🟧분석마비 | 🟫소극적참여 | 🔷과도한낙관 | 🔸외부요인탓
+📌팀 전체에 영향을 미치는 중요 결정
 
-SKIP 기준: 일반적인 의견 교환, 정보 공유, 부드러운 토론은 모두 SKIP.
-개입은 꼭 필요한 순간에만. 답변은 2-3문장 이내. 한국어로.`;
+위 패턴이 없고 일반 대화면 반드시 "SKIP"만 반환.
+개입 시 해당 패턴 이모지와 이름 먼저, 2-3문장 중재. 한국어.`;
+}
+
+function buildAlertPrompt(teamSummary: string, context: string, recentTranscript: string, category: ConflictCategory): string {
+  return `당신은 실시간 회의 AI 중재자입니다.
+
+팀 구성: ${teamSummary || '등록된 팀원 없음'}
+회의 주제: ${context || '없음'}
+
+${category.emoji} 감지된 패턴: "${category.name}" — ${category.desc}
+
+최근 대화:
+${recentTranscript}
+
+"${category.name}" 패턴이 감지됐습니다. 팀 성향을 고려해 즉시 중재하세요.
+- 직접적 공격(🔴)·관계갈등(🔶)·자기중심(🟥): 감정을 먼저 인정하고 대화 톤 전환
+- 책임회피(🔵)·소극적참여(🟫): 구체적 역할과 의견을 부드럽게 요청
+- 발산혼란(🟢)·분석마비(🟧): 현재 아젠다로 수렴하도록 안내
+- 에너지저하(⚫)·비교·경쟁(🟣): 팀 강점과 가능성을 상기
+- 수동공격(🟠)·애매모호(🟤): 숨겨진 불만을 직접 표현하도록 유도
+- 기타 패턴: 패턴 특성에 맞게 건설적으로 전환
+
+응답 형식: "${category.emoji} ${category.name}\n[2-3문장의 구체적 중재 메시지]"
+맥락상 명백히 문제없는 경우에만 SKIP. 한국어.`;
 }
 
 async function callApi(system: string, userContent: string, maxTokens = 1024): Promise<string> {
@@ -99,26 +124,32 @@ export default function AiPage() {
   const teamSummaryRef = useRef('');
   teamSummaryRef.current = teamSummary;
 
-  const runAnalysis = useCallback(async (entries: TranscriptEntry[]) => {
+  const runAnalysis = useCallback(async (entries: TranscriptEntry[], category?: ConflictCategory) => {
     if (isAnalyzingRef.current || entries.length === 0) return;
     isAnalyzingRef.current = true;
     setIsAnalyzing(true);
     try {
-      const transcriptText = entries.map((e) => `[${e.time}] ${e.speaker ? `${e.speaker}: ` : ''}${e.text}`).join('\n');
-      const result = await callApi(
-        buildAutoPrompt(teamSummaryRef.current, meetingContextRef.current, transcriptText),
-        '위 대화를 분석해주세요.',
-        512,
-      );
-      if (result.trim() !== 'SKIP') {
-        addMessage({
-          id: Date.now().toString(),
-          role: 'ai',
-          content: result,
-          timestamp: new Date().toISOString(),
-        });
-        setActiveTab('ai');
-      }
+      // for category alerts use last 8 entries for focused context; periodic checks use all
+      const contextEntries = category ? entries.slice(-8) : entries;
+      const transcriptText = contextEntries
+        .map((e) => `[${e.time}] ${e.speaker ? `${e.speaker}: ` : ''}${e.text}`)
+        .join('\n');
+
+      const systemPrompt = category
+        ? buildAlertPrompt(teamSummaryRef.current, meetingContextRef.current, transcriptText, category)
+        : buildAutoPrompt(teamSummaryRef.current, meetingContextRef.current, transcriptText);
+
+      const result = await callApi(systemPrompt, '위 대화를 분석해주세요.', 512);
+
+      if (result.trim() === 'SKIP') return;
+
+      addMessage({
+        id: Date.now().toString(),
+        role: 'ai',
+        content: result,
+        timestamp: new Date().toISOString(),
+      });
+      setActiveTab('ai');
     } catch {
       // silent fail — auto-analysis is best-effort
     } finally {
@@ -141,14 +172,13 @@ export default function AiPage() {
     transcriptRef.current = next;
     setTranscript(next);
 
-    const CONFLICT_KEYWORDS = ['아니', '반대', '문제', '이상해', '틀려', '아닌데', '아닌것', '왜 그래', '말이 안', '이해가 안', '화나', '짜증', '싫어', '못 하겠', '모르겠어', '다르게', '반드시', '절대'];
-    const hasConflict = CONFLICT_KEYWORDS.some((kw) => text.includes(kw));
+    const detectedCategory = detectConflict(text);
 
-    // 갈등 키워드 감지 시 즉시 분석, 그 외엔 5문장마다
-    const threshold = hasConflict ? 0 : 5;
-    if (hasConflict || next.length - lastAnalyzedCountRef.current >= threshold) {
+    // 패턴 감지 시 즉시 분석, 그 외엔 5문장마다 주기 분석
+    const threshold = detectedCategory ? 0 : 5;
+    if (detectedCategory || next.length - lastAnalyzedCountRef.current >= threshold) {
       lastAnalyzedCountRef.current = next.length;
-      runAnalysis(next);
+      runAnalysis(next, detectedCategory ?? undefined);
     }
   }, [runAnalysis]);
 
