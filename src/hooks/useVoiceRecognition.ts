@@ -33,6 +33,7 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
   const userStoppedRef = useRef(false);
   const isListeningRef = useRef(false);
   const sessionIdRef = useRef(0);
+  const nextFinalIndexRef = useRef(0);
 
   const createAndStart = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -47,6 +48,7 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
     }
 
     const mySession = ++sessionIdRef.current;
+    nextFinalIndexRef.current = 0;
 
     const rec = new SpeechRec();
     rec.lang = 'ko-KR';
@@ -68,10 +70,13 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
         const confidence = result[0].confidence;
 
         if (result.isFinal) {
-          if (confidence === 0 || confidence >= MIN_CONFIDENCE) {
-            onResultRef.current(transcript);
+          if (i >= nextFinalIndexRef.current) {
+            nextFinalIndexRef.current = i + 1;
+            if (confidence === 0 || confidence >= MIN_CONFIDENCE) {
+              onResultRef.current(transcript);
+            }
+            onInterimRef.current?.('');
           }
-          onInterimRef.current?.('');
         } else {
           interimText += transcript;
         }
