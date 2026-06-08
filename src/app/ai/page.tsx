@@ -12,7 +12,7 @@ import { LiveTranscript, type TranscriptEntry, COLOR_PALETTE } from '@/component
 import { MeetingControls } from '@/components/ai/MeetingControls';
 import { useVoiceRecognition } from '@/hooks/useVoiceRecognition';
 
-type Phase = 'setup' | 'meeting';
+type Phase = 'setup' | 'meeting' | 'summary';
 type ActiveTab = 'transcript' | 'ai';
 
 function buildSystemPrompt(context: string, teamSummary: string): string {
@@ -51,6 +51,45 @@ ${transcriptText}
 
 위 패턴이 없고 일반 대화면 반드시 "SKIP"만 반환.
 개입 시 해당 패턴 이모지와 이름 먼저, 2-3문장 중재. 한국어.`;
+}
+
+function buildSummaryPrompt(teamSummary: string, context: string, transcriptText: string, aiInterventions: string): string {
+  return `당신은 팀 회의 분석 전문가입니다.
+
+팀 구성: ${teamSummary || '등록된 팀원 없음'}
+회의 주제: ${context || '없음'}
+
+CODE 프레임워크:
+- D (Disruptor): 빠른 실행, 결단력 → 구체적 행동 목표로 동기 부여
+- O (Outreacher): 비전, 네트워킹 → 가능성과 기회 제시
+- C (Coordinator): 조율, 소통 → 팀 관계와 역할 명확화
+- E (Evaluator): 분석, 체계 → 데이터와 근거 기반 다음 단계
+- 복합 유형(DC, OE 등)은 두 성향 모두 반영
+
+=== 전체 대화 기록 ===
+${transcriptText || '(대화 내용 없음)'}
+
+=== AI 중재 개입 내역 ===
+${aiInterventions || '(AI 개입 없음)'}
+
+위 내용을 분석해 아래 형식으로 회의 요약을 작성하세요:
+
+## 📋 주요 논의 사항
+핵심 논의 내용 불릿으로 (2-4개)
+
+## ✅ 내려진 결정
+확정된 결정사항 불릿. 없으면 "이번 회의에서 확정된 결정 없음"
+
+## ❓ 미해결 항목
+결론 못 낸 사항 불릿. 없으면 "미해결 항목 없음"
+
+## 💡 팀원별 성향 기반 추천
+CODE 성향을 고려한 각자에게 맞는 역할·행동 제안
+
+## 🔥 다음 액션
+즉시 취해야 할 구체적 행동 2-3개
+
+한국어로 작성. 대화가 부족해도 최대한 분석해서 작성.`;
 }
 
 function buildAlertPrompt(teamSummary: string, context: string, recentTranscript: string, category: ConflictCategory): string {
@@ -107,6 +146,8 @@ export default function AiPage() {
   const [currentSpeaker, setCurrentSpeaker] = useState('');
   const currentSpeakerRef = useRef('');
   currentSpeakerRef.current = currentSpeaker;
+  const [meetingSummary, setMeetingSummary] = useState('');
+  const [isSummarizing, setIsSummarizing] = useState(false);
 
   const lastAnalyzedCountRef = useRef(0);
   const isAnalyzingRef = useRef(false);
@@ -285,12 +326,45 @@ export default function AiPage() {
     URL.revokeObjectURL(url);
   };
 
-  const handleEnd = () => {
+  const handleEnd = async () => {
     stop();
+    if (transcriptRef.current.length === 0) {
+      clearMessages();
+      setTranscript([]);
+      setInterimText('');
+      setCurrentSpeaker('');
+      transcriptRef.current = [];
+      lastAnalyzedCountRef.current = 0;
+      setPhase('setup');
+      return;
+    }
+    setIsSummarizing(true);
+    setPhase('summary');
+    const transcriptText = transcriptRef.current
+      .map((e) => `[${e.time}] ${e.speaker ? `${e.speaker}: ` : ''}${e.text}`)
+      .join('\n');
+    const aiInterventions = messages
+      .filter((m) => m.role === 'ai')
+      .slice(1)
+      .map((m, i) => `[개입 ${i + 1}] ${m.content}`)
+      .join('\n\n');
+    try {
+      const prompt = buildSummaryPrompt(teamSummaryRef.current, meetingContextRef.current, transcriptText, aiInterventions);
+      const result = await callApi(prompt, '위 회의 내용을 분석하고 요약해주세요.', 1500);
+      setMeetingSummary(result);
+    } catch {
+      setMeetingSummary('회의 요약을 생성하는 중 오류가 발생했습니다.\n내보내기로 기록을 저장해 주세요.');
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
+
+  const handleNewMeeting = () => {
     clearMessages();
     setTranscript([]);
     setInterimText('');
     setCurrentSpeaker('');
+    setMeetingSummary('');
     transcriptRef.current = [];
     lastAnalyzedCountRef.current = 0;
     setPhase('setup');
@@ -313,6 +387,117 @@ export default function AiPage() {
           </div>
         )}
         <MeetingSetup members={teamMembers} onStart={handleStart} />
+      </div>
+    );
+  }
+
+  // ── SUMMARY ──
+  if (phase === 'summary') {
+    const handleCopySummary = async () => {
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+      const lines = [
+        '[ 회의 요약 ]',
+        `날짜: ${dateStr}`,
+        meetingContextRef.current ? `주제: ${meetingContextRef.current}` : '',
+        teamSummaryRef.current ? `팀: ${teamSummaryRef.current}` : '',
+        '',
+        meetingSummary,
+        '',
+        '━━━ 대화 기록 ━━━',
+        ...transcriptRef.current.map((e) => `[${e.time}] ${e.speaker ? `${e.speaker}: ` : ''}${e.text}`),
+      ].filter(Boolean);
+      try {
+        await navigator.clipboard.writeText(lines.join('\n'));
+        showToast('클립보드에 복사됐어요!', 'success');
+      } catch {
+        showToast('복사 실패. 내보내기를 사용해 주세요.', 'error');
+      }
+    };
+
+    const handleExportSummary = () => {
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+      const lines = [
+        '[ 회의 요약 ]',
+        `날짜: ${dateStr}`,
+        meetingContextRef.current ? `주제: ${meetingContextRef.current}` : '',
+        teamSummaryRef.current ? `팀: ${teamSummaryRef.current}` : '',
+        '',
+        meetingSummary,
+        '',
+        '━━━ 대화 기록 ━━━',
+        ...transcriptRef.current.map((e) => `[${e.time}] ${e.speaker ? `${e.speaker}: ` : ''}${e.text}`),
+        '',
+        '━━━ AI 중재 내용 ━━━',
+        ...messages.filter((m) => m.role === 'ai').slice(1).map((m, i) => `[${i+1}] ${m.content}`),
+      ].filter((l) => l !== undefined);
+      const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `회의요약_${dateStr}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-8">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-xl font-bold text-slate-200">회의 요약</h1>
+            {meetingContextRef.current && (
+              <p className="text-xs text-slate-500 mt-0.5">{meetingContextRef.current}</p>
+            )}
+          </div>
+          <button
+            onClick={handleNewMeeting}
+            className="px-3 py-1.5 text-xs rounded-lg border border-border text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-colors"
+          >
+            새 회의 시작
+          </button>
+        </div>
+
+        {/* meta */}
+        <div className="card mb-4 flex flex-wrap gap-4 text-xs text-slate-500">
+          {teamSummaryRef.current && <span>👥 {teamSummaryRef.current}</span>}
+          <span>🎙 발화 {transcriptRef.current.length}개</span>
+          <span>🤖 AI 개입 {messages.filter((m) => m.role === 'ai').length - 1}회</span>
+        </div>
+
+        {isSummarizing ? (
+          <div className="card flex flex-col items-center gap-4 py-16 text-slate-500">
+            <div className="flex gap-1.5">
+              {[0,1,2].map((i) => (
+                <div key={i} className="w-2.5 h-2.5 rounded-full bg-accent animate-pulse" style={{ animationDelay: `${i*0.2}s` }} />
+              ))}
+            </div>
+            <p className="text-sm">회의 내용을 분석 중입니다...</p>
+          </div>
+        ) : (
+          <div className="card mb-4">
+            <div className="whitespace-pre-wrap text-sm text-slate-300 leading-relaxed">
+              {meetingSummary}
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button
+            onClick={handleCopySummary}
+            disabled={isSummarizing}
+            className="flex-1 py-2.5 text-sm font-medium rounded-xl border border-border text-slate-400 hover:text-accent hover:border-accent/40 transition-colors disabled:opacity-40"
+          >
+            복사
+          </button>
+          <button
+            onClick={handleExportSummary}
+            disabled={isSummarizing}
+            className="flex-1 py-2.5 text-sm font-medium rounded-xl border border-border text-slate-400 hover:text-accent hover:border-accent/40 transition-colors disabled:opacity-40"
+          >
+            파일 내보내기
+          </button>
+        </div>
       </div>
     );
   }
