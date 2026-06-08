@@ -186,6 +186,8 @@ export default function AiPage() {
   meetingContextRef.current = meetingContext;
   // transcriptRef stays in sync so handleVoiceResult never captures stale state
   const transcriptRef = useRef<TranscriptEntry[]>([]);
+  // tracks wall-clock time of last committed entry for merge logic
+  const lastEntryTimeRef = useRef(0);
 
   const teamSummary = teamMembers
     .map((m) => {
@@ -230,17 +232,29 @@ export default function AiPage() {
     }
   }, [addMessage]);
 
+  const MERGE_WINDOW_MS = 1500;
+
   const handleVoiceResult = useCallback((text: string) => {
     const now = new Date();
+    const nowMs = now.getTime();
     const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const entry: TranscriptEntry = {
-      id: Date.now().toString(),
-      text,
-      time,
-      speaker: currentSpeakerRef.current || undefined,
-    };
+    const speaker = currentSpeakerRef.current || undefined;
 
-    const next = [...transcriptRef.current, entry];
+    const prev = transcriptRef.current;
+    const lastEntry = prev[prev.length - 1];
+    const withinWindow = nowMs - lastEntryTimeRef.current < MERGE_WINDOW_MS;
+    const sameSpeaker = lastEntry?.speaker === speaker;
+
+    let next: TranscriptEntry[];
+    if (lastEntry && withinWindow && sameSpeaker) {
+      // 짧은 침묵 후 이어 말한 경우 — 같은 줄에 합치기
+      const merged = { ...lastEntry, text: lastEntry.text + ' ' + text };
+      next = [...prev.slice(0, -1), merged];
+    } else {
+      next = [...prev, { id: Date.now().toString(), text, time, speaker }];
+    }
+
+    lastEntryTimeRef.current = nowMs;
     transcriptRef.current = next;
     setTranscript(next);
 
