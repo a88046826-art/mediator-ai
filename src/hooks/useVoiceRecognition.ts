@@ -29,13 +29,9 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
   useEffect(() => { onErrorRef.current = onError; }, [onError]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recRef = useRef<any>(null);
   const userStoppedRef = useRef(false);
   const isListeningRef = useRef(false);
-  const noSpeechRef = useRef(false);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  // session ID prevents stale onresult from a previous session firing after restart
   const sessionIdRef = useRef(0);
 
   const createAndStart = useCallback(() => {
@@ -54,17 +50,14 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
 
     const rec = new SpeechRec();
     rec.lang = 'ko-KR';
-    // continuous: false — one utterance per session, then onend fires cleanly.
-    // We restart manually in onend to get continuous-like behavior without
-    // Chrome's result-accumulation bug that causes duplicates.
-    rec.continuous = false;
+    // continuous: true — 세션을 유지해 Android에서 재시작 시 권한 팝업 반복 방지
+    rec.continuous = true;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
     recRef.current = rec;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     rec.onresult = (e: any) => {
-      // discard results from a session that was already replaced
       if (mySession !== sessionIdRef.current) return;
 
       let interimText = '';
@@ -91,10 +84,7 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     rec.onerror = (e: any) => {
       if (mySession !== sessionIdRef.current) return;
-      if (e.error === 'no-speech') {
-        noSpeechRef.current = true;
-        return;
-      }
+      if (e.error === 'no-speech' || e.error === 'aborted') return;
       const msg =
         e.error === 'not-allowed' ? '마이크 권한을 허용해 주세요.' :
         e.error === 'network'     ? '네트워크 오류가 발생했습니다.' :
@@ -102,17 +92,14 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
       onErrorRef.current?.(msg);
     };
 
+    // continuous 모드에서도 네트워크 끊김 등으로 onEnd가 올 수 있음 — 재시작
     rec.onend = () => {
       if (mySession !== sessionIdRef.current) return;
       recRef.current = null;
       onInterimRef.current?.('');
       if (!userStoppedRef.current && isListeningRef.current) {
-        // no-speech 후엔 500ms 딜레이로 권한 팝업 반복 방지
-        const delay = noSpeechRef.current ? 500 : 0;
-        noSpeechRef.current = false;
-        setTimeout(createAndStart, delay);
+        setTimeout(createAndStart, 300);
       } else {
-        noSpeechRef.current = false;
         isListeningRef.current = false;
         setIsListening(false);
       }
@@ -128,27 +115,14 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
     }
   }, []);
 
-  const start = useCallback(async () => {
+  const start = useCallback(() => {
     if (isListeningRef.current) return;
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const w = window as any;
-    const SpeechRec = w.SpeechRecognition ?? w.webkitSpeechRecognition;
-    if (!SpeechRec) {
+    if (!(w.SpeechRecognition ?? w.webkitSpeechRecognition)) {
       onErrorRef.current?.('이 브라우저는 음성 인식을 지원하지 않습니다. Chrome을 사용해 주세요.');
       return;
     }
-
-    // 마이크 권한을 미리 한 번만 획득 — Android에서 재시작 시 팝업 반복 방지
-    if (!mediaStreamRef.current) {
-      try {
-        mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
-      } catch {
-        onErrorRef.current?.('마이크 권한을 허용해 주세요.');
-        return;
-      }
-    }
-
     userStoppedRef.current = false;
     isListeningRef.current = true;
     setIsListening(true);
@@ -163,9 +137,6 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
     onInterimRef.current?.('');
     try { recRef.current?.stop(); } catch { /* ignore */ }
     recRef.current = null;
-    // 마이크 스트림 해제
-    mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
-    mediaStreamRef.current = null;
   }, []);
 
   const toggle = useCallback(() => {
