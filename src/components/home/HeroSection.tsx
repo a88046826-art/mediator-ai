@@ -28,12 +28,9 @@ export function HeroSection() {
           AI 중재자가 회의 갈등을 실시간으로 해결합니다.
         </p>
 
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Link href="/test" className="btn-primary text-base px-8 py-4">
+        <div className="flex justify-center">
+          <Link href="/test" className="btn-primary text-base px-10 py-4">
             내 성향 진단하기 →
-          </Link>
-          <Link href="/ai" className="btn-secondary text-base px-8 py-4">
-            AI 중재 시작하기
           </Link>
         </div>
       </div>
