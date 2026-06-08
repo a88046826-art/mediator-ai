@@ -53,18 +53,20 @@ ${transcriptText}
 개입 시 해당 패턴 이모지와 이름 먼저, 2-3문장 중재. 한국어.`;
 }
 
-function buildSummaryPrompt(teamSummary: string, context: string, transcriptText: string, aiInterventions: string): string {
+type SummaryView = null | 'analysis' | 'next-topic' | 'mvp';
+
+function buildAnalysisPrompt(teamSummary: string, context: string, transcriptText: string, aiInterventions: string): string {
   return `당신은 팀 회의 분석 전문가입니다.
 
 팀 구성: ${teamSummary || '등록된 팀원 없음'}
 회의 주제: ${context || '없음'}
 
 CODE 프레임워크:
-- D (Disruptor): 빠른 실행, 결단력 → 구체적 행동 목표로 동기 부여
-- O (Outreacher): 비전, 네트워킹 → 가능성과 기회 제시
-- C (Coordinator): 조율, 소통 → 팀 관계와 역할 명확화
-- E (Evaluator): 분석, 체계 → 데이터와 근거 기반 다음 단계
-- 복합 유형(DC, OE 등)은 두 성향 모두 반영
+- D (Disruptor): 빠른 실행, 결단력
+- O (Outreacher): 비전, 네트워킹
+- C (Coordinator): 조율, 소통
+- E (Evaluator): 분석, 체계
+- 복합 유형(DC 등)은 두 성향 모두 반영
 
 === 전체 대화 기록 ===
 ${transcriptText || '(대화 내용 없음)'}
@@ -72,24 +74,83 @@ ${transcriptText || '(대화 내용 없음)'}
 === AI 중재 개입 내역 ===
 ${aiInterventions || '(AI 개입 없음)'}
 
-위 내용을 분석해 아래 형식으로 회의 요약을 작성하세요:
+아래 형식으로 회의 결과를 분석하세요:
 
 ## 📋 주요 논의 사항
 핵심 논의 내용 불릿으로 (2-4개)
 
 ## ✅ 내려진 결정
-확정된 결정사항 불릿. 없으면 "이번 회의에서 확정된 결정 없음"
+확정된 결정사항 불릿. 없으면 "확정된 결정 없음"
 
 ## ❓ 미해결 항목
 결론 못 낸 사항 불릿. 없으면 "미해결 항목 없음"
 
-## 💡 팀원별 성향 기반 추천
-CODE 성향을 고려한 각자에게 맞는 역할·행동 제안
+## 🧭 팀 역학 분석
+갈등 패턴, 소통 방식, 분위기 등 한 문단 평가
 
-## 🔥 다음 액션
-즉시 취해야 할 구체적 행동 2-3개
+## 🔥 즉시 할 일
+구체적 다음 액션 2-3개
 
-한국어로 작성. 대화가 부족해도 최대한 분석해서 작성.`;
+한국어. 대화가 부족해도 최대한 분석.`;
+}
+
+function buildNextTopicsPrompt(teamSummary: string, context: string, transcriptText: string): string {
+  return `당신은 팀 회의 퍼실리테이터입니다.
+
+팀 구성: ${teamSummary || '등록된 팀원 없음'}
+이번 회의 주제: ${context || '없음'}
+
+=== 대화 기록 ===
+${transcriptText || '(대화 내용 없음)'}
+
+이번 회의 내용을 바탕으로 다음 회의에서 다뤄야 할 주제를 추천하세요.
+
+## 🎯 추천 주제 (우선순위 순)
+
+각 주제마다 아래 형식으로:
+**1. [주제명]**
+- 이유: 이번 회의에서 연결되는 맥락
+- 예상 소요: XX분
+- 사전 준비: 필요한 준비사항
+
+(3가지 추천)
+
+## 💡 다음 회의 진행 팁
+팀 성향을 고려한 회의 운영 제안 1-2가지
+
+한국어.`;
+}
+
+function buildMvpPrompt(teamSummary: string, context: string, transcriptText: string): string {
+  return `당신은 팀 성과 코치입니다.
+
+팀 구성: ${teamSummary || '등록된 팀원 없음'}
+회의 주제: ${context || '없음'}
+
+CODE 프레임워크:
+- D (Disruptor): 실행력, 결단 → 아이디어 추진, 빠른 결정 기여
+- O (Outreacher): 비전, 에너지 → 팀 동기부여, 가능성 제시
+- C (Coordinator): 조율, 공감 → 갈등 중재, 팀 분위기 관리
+- E (Evaluator): 분석, 검증 → 리스크 지적, 근거 제시
+
+=== 대화 기록 ===
+${transcriptText || '(대화 내용 없음)'}
+
+이번 회의의 MVP를 CODE 성향 기반으로 선정하고 평가하세요.
+
+## 🏆 이번 회의 MVP
+MVP 이름과 선정 이유 (2-3문장)
+
+## 📊 팀원별 기여 평가
+각 팀원의 CODE 성향에 맞는 기여 포인트와 한 줄 피드백
+
+## 🌟 팀 전체 칭찬
+이번 회의에서 팀으로서 잘한 점 1-2가지
+
+## 💪 다음 회의를 위한 제안
+각 팀원이 자신의 성향을 더 잘 발휘할 수 있는 팁 한 줄씩
+
+팀원이 없으면 일반적인 기여도 분석. 한국어.`;
 }
 
 function buildAlertPrompt(teamSummary: string, context: string, recentTranscript: string, category: ConflictCategory): string {
@@ -146,7 +207,8 @@ export default function AiPage() {
   const [currentSpeaker, setCurrentSpeaker] = useState('');
   const currentSpeakerRef = useRef('');
   currentSpeakerRef.current = currentSpeaker;
-  const [meetingSummary, setMeetingSummary] = useState('');
+  const [summaryView, setSummaryView] = useState<SummaryView>(null);
+  const [summaryContent, setSummaryContent] = useState('');
   const [isSummarizing, setIsSummarizing] = useState(false);
 
   const lastAnalyzedCountRef = useRef(0);
@@ -326,7 +388,7 @@ export default function AiPage() {
     URL.revokeObjectURL(url);
   };
 
-  const handleEnd = async () => {
+  const handleEnd = () => {
     stop();
     if (transcriptRef.current.length === 0) {
       clearMessages();
@@ -338,8 +400,16 @@ export default function AiPage() {
       setPhase('setup');
       return;
     }
-    setIsSummarizing(true);
+    setSummaryView(null);
+    setSummaryContent('');
     setPhase('summary');
+  };
+
+  const handleSummarySelect = async (view: Exclude<SummaryView, null>) => {
+    if (isSummarizing) return;
+    setSummaryView(view);
+    setSummaryContent('');
+    setIsSummarizing(true);
     const transcriptText = transcriptRef.current
       .map((e) => `[${e.time}] ${e.speaker ? `${e.speaker}: ` : ''}${e.text}`)
       .join('\n');
@@ -349,11 +419,14 @@ export default function AiPage() {
       .map((m, i) => `[개입 ${i + 1}] ${m.content}`)
       .join('\n\n');
     try {
-      const prompt = buildSummaryPrompt(teamSummaryRef.current, meetingContextRef.current, transcriptText, aiInterventions);
-      const result = await callApi(prompt, '위 회의 내용을 분석하고 요약해주세요.', 1500);
-      setMeetingSummary(result);
+      let prompt = '';
+      if (view === 'analysis') prompt = buildAnalysisPrompt(teamSummaryRef.current, meetingContextRef.current, transcriptText, aiInterventions);
+      else if (view === 'next-topic') prompt = buildNextTopicsPrompt(teamSummaryRef.current, meetingContextRef.current, transcriptText);
+      else if (view === 'mvp') prompt = buildMvpPrompt(teamSummaryRef.current, meetingContextRef.current, transcriptText);
+      const result = await callApi(prompt, '분석해주세요.', 1500);
+      setSummaryContent(result);
     } catch {
-      setMeetingSummary('회의 요약을 생성하는 중 오류가 발생했습니다.\n내보내기로 기록을 저장해 주세요.');
+      setSummaryContent('분석 중 오류가 발생했습니다. 다시 시도해 주세요.');
     } finally {
       setIsSummarizing(false);
     }
@@ -364,7 +437,8 @@ export default function AiPage() {
     setTranscript([]);
     setInterimText('');
     setCurrentSpeaker('');
-    setMeetingSummary('');
+    setSummaryView(null);
+    setSummaryContent('');
     transcriptRef.current = [];
     lastAnalyzedCountRef.current = 0;
     setPhase('setup');
@@ -393,16 +467,44 @@ export default function AiPage() {
 
   // ── SUMMARY ──
   if (phase === 'summary') {
+    const SUMMARY_ACTIONS = [
+      {
+        key: 'analysis' as const,
+        emoji: '📊',
+        title: '회의결과 분석',
+        desc: '논의사항 · 결정 · 미해결 · 팀 역학',
+        color: 'from-violet-500/20 to-violet-500/5 border-violet-500/30 hover:border-violet-400/60',
+        textColor: 'text-violet-300',
+      },
+      {
+        key: 'next-topic' as const,
+        emoji: '🎯',
+        title: '다음 회의 주제 추천',
+        desc: '우선순위 · 예상 시간 · 준비사항',
+        color: 'from-blue-500/20 to-blue-500/5 border-blue-500/30 hover:border-blue-400/60',
+        textColor: 'text-blue-300',
+      },
+      {
+        key: 'mvp' as const,
+        emoji: '🏆',
+        title: '이번 회의 MVP 보기',
+        desc: 'CODE 성향 기반 팀원별 기여 평가',
+        color: 'from-amber-500/20 to-amber-500/5 border-amber-500/30 hover:border-amber-400/60',
+        textColor: 'text-amber-300',
+      },
+    ];
+
     const handleCopySummary = async () => {
       const now = new Date();
       const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+      const viewLabel = SUMMARY_ACTIONS.find((a) => a.key === summaryView)?.title ?? '회의 분석';
       const lines = [
-        '[ 회의 요약 ]',
+        `[ ${viewLabel} ]`,
         `날짜: ${dateStr}`,
         meetingContextRef.current ? `주제: ${meetingContextRef.current}` : '',
         teamSummaryRef.current ? `팀: ${teamSummaryRef.current}` : '',
         '',
-        meetingSummary,
+        summaryContent,
         '',
         '━━━ 대화 기록 ━━━',
         ...transcriptRef.current.map((e) => `[${e.time}] ${e.speaker ? `${e.speaker}: ` : ''}${e.text}`),
@@ -418,13 +520,14 @@ export default function AiPage() {
     const handleExportSummary = () => {
       const now = new Date();
       const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+      const viewLabel = SUMMARY_ACTIONS.find((a) => a.key === summaryView)?.title ?? '회의분석';
       const lines = [
-        '[ 회의 요약 ]',
+        `[ ${viewLabel} ]`,
         `날짜: ${dateStr}`,
         meetingContextRef.current ? `주제: ${meetingContextRef.current}` : '',
         teamSummaryRef.current ? `팀: ${teamSummaryRef.current}` : '',
         '',
-        meetingSummary,
+        summaryContent,
         '',
         '━━━ 대화 기록 ━━━',
         ...transcriptRef.current.map((e) => `[${e.time}] ${e.speaker ? `${e.speaker}: ` : ''}${e.text}`),
@@ -436,20 +539,16 @@ export default function AiPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `회의요약_${dateStr}.txt`;
+      a.download = `${viewLabel.replace(/ /g, '_')}_${dateStr}.txt`;
       a.click();
       URL.revokeObjectURL(url);
     };
 
     return (
       <div className="max-w-2xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-xl font-bold text-slate-200">회의 요약</h1>
-            {meetingContextRef.current && (
-              <p className="text-xs text-slate-500 mt-0.5">{meetingContextRef.current}</p>
-            )}
-          </div>
+        {/* header */}
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-xl font-bold text-slate-200">회의 종료</h1>
           <button
             onClick={handleNewMeeting}
             className="px-3 py-1.5 text-xs rounded-lg border border-border text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-colors"
@@ -457,47 +556,95 @@ export default function AiPage() {
             새 회의 시작
           </button>
         </div>
-
-        {/* meta */}
-        <div className="card mb-4 flex flex-wrap gap-4 text-xs text-slate-500">
-          {teamSummaryRef.current && <span>👥 {teamSummaryRef.current}</span>}
-          <span>🎙 발화 {transcriptRef.current.length}개</span>
-          <span>🤖 AI 개입 {messages.filter((m) => m.role === 'ai').length - 1}회</span>
-        </div>
-
-        {isSummarizing ? (
-          <div className="card flex flex-col items-center gap-4 py-16 text-slate-500">
-            <div className="flex gap-1.5">
-              {[0,1,2].map((i) => (
-                <div key={i} className="w-2.5 h-2.5 rounded-full bg-accent animate-pulse" style={{ animationDelay: `${i*0.2}s` }} />
-              ))}
-            </div>
-            <p className="text-sm">회의 내용을 분석 중입니다...</p>
-          </div>
-        ) : (
-          <div className="card mb-4">
-            <div className="whitespace-pre-wrap text-sm text-slate-300 leading-relaxed">
-              {meetingSummary}
-            </div>
-          </div>
+        {meetingContextRef.current && (
+          <p className="text-xs text-slate-500 mb-5">{meetingContextRef.current}</p>
         )}
 
-        <div className="flex gap-3">
-          <button
-            onClick={handleCopySummary}
-            disabled={isSummarizing}
-            className="flex-1 py-2.5 text-sm font-medium rounded-xl border border-border text-slate-400 hover:text-accent hover:border-accent/40 transition-colors disabled:opacity-40"
-          >
-            복사
-          </button>
-          <button
-            onClick={handleExportSummary}
-            disabled={isSummarizing}
-            className="flex-1 py-2.5 text-sm font-medium rounded-xl border border-border text-slate-400 hover:text-accent hover:border-accent/40 transition-colors disabled:opacity-40"
-          >
-            파일 내보내기
-          </button>
+        {/* stats */}
+        <div className="flex flex-wrap gap-3 mb-6 text-xs text-slate-500">
+          {teamSummaryRef.current && <span className="px-2.5 py-1 rounded-full bg-white/5">👥 {teamSummaryRef.current}</span>}
+          <span className="px-2.5 py-1 rounded-full bg-white/5">🎙 발화 {transcriptRef.current.length}개</span>
+          <span className="px-2.5 py-1 rounded-full bg-white/5">🤖 AI 개입 {Math.max(0, messages.filter((m) => m.role === 'ai').length - 1)}회</span>
         </div>
+
+        {/* view: button selection */}
+        {summaryView === null && (
+          <>
+            <p className="text-sm text-slate-400 mb-4">무엇을 확인할까요?</p>
+            <div className="grid gap-3">
+              {SUMMARY_ACTIONS.map((action) => (
+                <button
+                  key={action.key}
+                  onClick={() => handleSummarySelect(action.key)}
+                  className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl border bg-gradient-to-br transition-all text-left ${action.color}`}
+                >
+                  <span className="text-3xl shrink-0">{action.emoji}</span>
+                  <div>
+                    <p className={`font-semibold text-sm ${action.textColor}`}>{action.title}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{action.desc}</p>
+                  </div>
+                  <svg className="ml-auto w-4 h-4 text-slate-600 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* view: loading or result */}
+        {summaryView !== null && (
+          <>
+            <div className="flex items-center gap-3 mb-4">
+              <button
+                onClick={() => { setSummaryView(null); setSummaryContent(''); }}
+                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors"
+                aria-label="뒤로"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <span className={`font-semibold text-sm ${SUMMARY_ACTIONS.find((a) => a.key === summaryView)?.textColor}`}>
+                {SUMMARY_ACTIONS.find((a) => a.key === summaryView)?.emoji}{' '}
+                {SUMMARY_ACTIONS.find((a) => a.key === summaryView)?.title}
+              </span>
+            </div>
+
+            {isSummarizing ? (
+              <div className="card flex flex-col items-center gap-4 py-16 text-slate-500">
+                <div className="flex gap-1.5">
+                  {[0,1,2].map((i) => (
+                    <div key={i} className="w-2.5 h-2.5 rounded-full bg-accent animate-pulse" style={{ animationDelay: `${i*0.2}s` }} />
+                  ))}
+                </div>
+                <p className="text-sm">분석 중입니다...</p>
+              </div>
+            ) : (
+              <>
+                <div className="card mb-4">
+                  <div className="whitespace-pre-wrap text-sm text-slate-300 leading-relaxed">
+                    {summaryContent}
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleCopySummary}
+                    className="flex-1 py-2.5 text-sm font-medium rounded-xl border border-border text-slate-400 hover:text-accent hover:border-accent/40 transition-colors"
+                  >
+                    복사
+                  </button>
+                  <button
+                    onClick={handleExportSummary}
+                    className="flex-1 py-2.5 text-sm font-medium rounded-xl border border-border text-slate-400 hover:text-accent hover:border-accent/40 transition-colors"
+                  >
+                    파일 내보내기
+                  </button>
+                </div>
+              </>
+            )}
+          </>
+        )}
       </div>
     );
   }
