@@ -12,6 +12,21 @@ import { MeetingControls } from '@/components/ai/MeetingControls';
 import { useVoiceRecognition } from '@/hooks/useVoiceRecognition';
 
 type Phase = 'setup' | 'meeting' | 'summary';
+
+const PROFANITY = [
+  '씨발', '씨바', '시발', '시바', 'ㅅㅂ', '씨팔',
+  '개새끼', 'ㄱㅅㄲ',
+  '병신', 'ㅂㅅ',
+  '지랄',
+  '좆', '존나', 'ㅈㄴ',
+  '창녀', '보지', '자지',
+  'fuck', 'shit', 'bitch', 'asshole', 'bastard', 'cunt',
+];
+
+function containsProfanity(text: string): boolean {
+  const normalized = text.toLowerCase();
+  return PROFANITY.some((w) => normalized.includes(w.toLowerCase()));
+}
 type ActiveTab = 'transcript' | 'ai';
 
 function buildSystemPrompt(context: string, teamSummary: string): string {
@@ -177,19 +192,41 @@ ${transcriptText || '(없음)'}
 
 
 
-async function callApi(system: string, userContent: string, maxTokens = 1024): Promise<string> {
+type ApiMessage = { role: 'user' | 'ai'; content: string };
+
+async function callApi(
+  system: string,
+  userContent: string,
+  maxTokens = 1024,
+  history?: ApiMessage[],
+): Promise<string> {
+  const messages: ApiMessage[] = history ?? [{ role: 'user', content: userContent }];
   const res = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      system,
-      messages: [{ role: 'user', content: userContent }],
-      maxTokens,
-    }),
+    body: JSON.stringify({ system, messages, maxTokens }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? `API error ${res.status}`);
   return data.content as string;
+}
+
+function buildChatSystemPrompt(teamSummary: string, context: string, transcriptText: string): string {
+  return `당신은 팀 회의 중재 보조자입니다. 지금 회의를 진행 중인 촉진자(진행자)가 채팅으로 질문하면 답합니다.
+
+팀 구성: ${teamSummary || '없음'}
+회의 주제: ${context || '없음'}
+
+=== 현재 대화 기록 ===
+${transcriptText || '(아직 없음)'}
+
+규칙:
+1. 회의를 직접 이끌거나 결론을 유도하지 마세요. 당신은 보조자입니다.
+2. 촉진자의 질문에 2-3문장으로만 답하세요.
+3. 팀원에게 직접 말 걸지 마세요 — 촉진자에게만 조언하세요.
+4. 욕설·비속어가 포함된 메시지에는 반드시 "적절한 언어로 다시 질문해 주세요."라고만 답하세요.
+5. 회의의 주인공은 팀원들입니다. 당신은 배경 지원자입니다.
+한국어.`;
 }
 
 export default function AiPage() {
@@ -214,6 +251,10 @@ export default function AiPage() {
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [aiError, setAiError] = useState(false);
   const [micBlocked, setMicBlocked] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatting, setIsChatting] = useState(false);
+  const chatHistoryRef = useRef<ApiMessage[]>([]);
+  const chatInputRef = useRef<HTMLInputElement>(null);
 
   const lastAnalyzedCountRef = useRef(0);
   const isAnalyzingRef = useRef(false);
@@ -458,6 +499,45 @@ export default function AiPage() {
     }
   };
 
+  const handleChatSend = useCallback(async () => {
+    const text = chatInput.trim();
+    if (!text || isChatting) return;
+
+    if (containsProfanity(text)) {
+      showToast('비속어가 포함된 메시지는 전송할 수 없어요.', 'error');
+      return;
+    }
+
+    setChatInput('');
+    setIsChatting(true);
+    setActiveTab('ai');
+
+    const userMsg: ApiMessage = { role: 'user', content: text };
+    addMessage({ id: Date.now().toString(), role: 'user', content: text, timestamp: new Date().toISOString() });
+
+    const transcriptText = transcriptRef.current
+      .map((e) => `[${e.time}] ${e.speaker ? `${e.speaker}: ` : ''}${e.text}`)
+      .join('\n');
+
+    const history: ApiMessage[] = [...chatHistoryRef.current, userMsg];
+
+    try {
+      const system = buildChatSystemPrompt(teamSummaryRef.current, meetingContextRef.current, transcriptText);
+      const result = await callApi(system, text, 512, history);
+
+      const aiMsg: ApiMessage = { role: 'ai', content: result };
+      chatHistoryRef.current = [...history, aiMsg];
+
+      addMessage({ id: Date.now().toString(), role: 'ai', content: result, timestamp: new Date().toISOString() });
+    } catch {
+      showToast('AI 응답 오류가 발생했어요.', 'error');
+      chatHistoryRef.current = history;
+    } finally {
+      setIsChatting(false);
+      setTimeout(() => chatInputRef.current?.focus(), 50);
+    }
+  }, [chatInput, isChatting, addMessage, showToast]);
+
   const handleNewMeeting = () => {
     clearMessages();
     setTranscript([]);
@@ -465,6 +545,8 @@ export default function AiPage() {
     setCurrentSpeaker('');
     setSummaryView(null);
     setSummaryContent('');
+    setChatInput('');
+    chatHistoryRef.current = [];
     transcriptRef.current = [];
     lastAnalyzedCountRef.current = 0;
     sessionCallCountRef.current = 0;
@@ -792,12 +874,34 @@ export default function AiPage() {
           <LiveTranscript entries={transcript} interimText={interimText} speakerColors={speakerColors} />
         </div>
 
-        {/* right: AI interventions */}
+        {/* right: AI interventions + chat */}
         <div className={`flex-col overflow-hidden sm:flex sm:flex-1 ${activeTab === 'ai' ? 'flex flex-1' : 'hidden'}`}>
           <div className="shrink-0 px-4 pt-3 pb-2 border-b border-border/40">
             <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">AI 중재</p>
           </div>
-          <ChatWindow messages={messages} isLoading={false} />
+          <ChatWindow messages={messages} isLoading={isChatting} />
+          {/* chat input */}
+          <div className="shrink-0 border-t border-border/40 px-3 py-2.5 flex gap-2 items-center bg-surface">
+            <input
+              ref={chatInputRef}
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChatSend(); }
+              }}
+              placeholder="중재자에게 질문 또는 맥락 전달..."
+              className="input-base flex-1 text-sm py-2"
+              disabled={isChatting}
+            />
+            <button
+              onClick={handleChatSend}
+              disabled={isChatting || !chatInput.trim()}
+              className="shrink-0 px-3 py-2 rounded-lg bg-accent/20 text-accent text-sm font-medium hover:bg-accent/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              전송
+            </button>
+          </div>
         </div>
       </div>
 

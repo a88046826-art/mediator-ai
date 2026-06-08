@@ -31,7 +31,12 @@ export async function POST(req: NextRequest) {
     }
 
     const { system, messages, maxTokens } = JSON.parse(raw);
-    const userMessage = messages.find((m: { role: string }) => m.role === 'user')?.content ?? '';
+
+    // Support multi-turn: convert internal 'ai' role → Anthropic 'assistant'
+    const anthropicMessages = (messages as { role: string; content: string }[]).map((m) => ({
+      role: (m.role === 'ai' ? 'assistant' : 'user') as 'user' | 'assistant',
+      content: m.content,
+    }));
 
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -39,7 +44,7 @@ export async function POST(req: NextRequest) {
       model: 'claude-haiku-4-5-20251001',
       max_tokens: Math.min(maxTokens ?? 1024, MAX_TOKENS_CAP),
       system,
-      messages: [{ role: 'user', content: userMessage }],
+      messages: anthropicMessages,
     });
 
     const content = response.content[0].type === 'text' ? response.content[0].text : '';
