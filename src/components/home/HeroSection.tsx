@@ -29,7 +29,7 @@ export function HeroSection() {
         </p>
 
         <div className="flex justify-center">
-          <Link href="/test" className="btn-primary text-base px-10 py-4">
+          <Link href="/test/code" className="btn-primary text-base px-10 py-4">
             내 성향 진단하기 →
           </Link>
         </div>

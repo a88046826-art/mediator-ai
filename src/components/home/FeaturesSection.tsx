@@ -7,7 +7,7 @@ const steps = [
     title: '성향 진단',
     desc: '20개 질문으로 D·O·C·E 성향 비율과 나의 타입을 파악해요.',
     action: '진단 시작하기',
-    href: '/test',
+    href: '/test/code',
   },
   {
     step: '02',

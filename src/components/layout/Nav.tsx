@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 
 const links = [
   { href: '/', label: '홈' },
-  { href: '/test', label: '진단' },
+  { href: '/test/code', label: '진단' },
   { href: '/team', label: '팀' },
   { href: '/ai', label: 'AI 중재' },
   { href: '/history', label: '기록' },
