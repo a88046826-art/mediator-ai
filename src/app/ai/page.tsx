@@ -168,11 +168,14 @@ export default function AiPage() {
   const [summaryView, setSummaryView] = useState<SummaryView>(null);
   const [summaryContent, setSummaryContent] = useState('');
   const [isSummarizing, setIsSummarizing] = useState(false);
+  const [aiError, setAiError] = useState(false);
+  const [micBlocked, setMicBlocked] = useState(false);
 
   const lastAnalyzedCountRef = useRef(0);
   const isAnalyzingRef = useRef(false);
   const sessionCallCountRef = useRef(0);
   const MAX_SESSION_CALLS = 30;
+  const analysisFailCountRef = useRef(0);
   const meetingContextRef = useRef('');
   meetingContextRef.current = meetingContext;
   // transcriptRef stays in sync so handleVoiceResult never captures stale state
@@ -213,8 +216,11 @@ export default function AiPage() {
         timestamp: new Date().toISOString(),
       });
       setActiveTab('ai');
+      analysisFailCountRef.current = 0;
+      setAiError(false);
     } catch {
-      // silent fail — auto-analysis is best-effort
+      analysisFailCountRef.current++;
+      if (analysisFailCountRef.current >= 2) setAiError(true);
     } finally {
       isAnalyzingRef.current = false;
       setIsAnalyzing(false);
@@ -261,7 +267,13 @@ export default function AiPage() {
   const { isListening, isSupported, toggle, stop } = useVoiceRecognition({
     onResult: handleVoiceResult,
     onInterim: setInterimText,
-    onError: (err) => showToast(`음성 오류: ${err}`, 'error'),
+    onError: (err) => {
+      if (err.includes('권한')) {
+        setMicBlocked(true);
+      } else {
+        showToast(`음성 오류: ${err}`, 'error');
+      }
+    },
   });
 
   const handleStart = (context: string) => {
@@ -626,6 +638,29 @@ export default function AiPage() {
 
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 4rem)' }}>
+
+      {/* 마이크 권한 차단 배너 */}
+      {micBlocked && (
+        <div className="shrink-0 flex items-start gap-3 px-4 py-3 bg-red-500/10 border-b border-red-500/30 text-sm text-red-300">
+          <span className="shrink-0 mt-0.5">🎙</span>
+          <div className="flex-1">
+            <p className="font-medium">마이크 권한이 차단되어 있어요</p>
+            <p className="text-xs text-red-400/80 mt-0.5">
+              브라우저 주소창 왼쪽 자물쇠 아이콘 → 마이크 → 허용 → 페이지 새로고침
+            </p>
+          </div>
+          <button onClick={() => setMicBlocked(false)} className="shrink-0 text-red-400/60 hover:text-red-300">✕</button>
+        </div>
+      )}
+
+      {/* AI 연결 오류 배너 */}
+      {aiError && (
+        <div className="shrink-0 flex items-center gap-3 px-4 py-2.5 bg-yellow-500/10 border-b border-yellow-500/30 text-xs text-yellow-300">
+          <span>⚠️</span>
+          <span className="flex-1">AI 분석 연결에 문제가 있어요. 회의는 계속 진행되지만 자동 중재가 일시 중단됐어요.</span>
+          <button onClick={() => { setAiError(false); analysisFailCountRef.current = 0; }} className="shrink-0 text-yellow-400/60 hover:text-yellow-300">✕</button>
+        </div>
+      )}
 
       {/* header */}
       <div className="shrink-0 flex items-center justify-between px-4 py-2.5 border-b border-border bg-surface">
