@@ -36,3 +36,19 @@ export interface Message {
   timestamp: string;
   isAlert?: boolean;
 }
+
+export interface TranscriptEntry {
+  id: string;
+  text: string;
+  time: string;
+  speaker?: string;
+}
+
+export interface MeetingRecord {
+  id: string;
+  date: string;
+  topic: string;
+  teamSummary: string;
+  transcript: TranscriptEntry[];
+  aiMessages: Message[];
+}

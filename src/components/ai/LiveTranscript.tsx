@@ -1,13 +1,9 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import type { TranscriptEntry } from '@/types';
 
-export interface TranscriptEntry {
-  id: string;
-  text: string;
-  time: string;
-  speaker?: string;
-}
+export type { TranscriptEntry };
 
 interface Props {
   entries: TranscriptEntry[];

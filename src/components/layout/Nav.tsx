@@ -8,6 +8,7 @@ const links = [
   { href: '/test', label: '진단' },
   { href: '/team', label: '팀' },
   { href: '/ai', label: 'AI 중재' },
+  { href: '/history', label: '기록' },
 ];
 
 export function Nav() {

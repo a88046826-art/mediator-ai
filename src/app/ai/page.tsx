@@ -142,6 +142,7 @@ export default function AiPage() {
   const messages = useAppStore((s) => s.messages);
   const addMessage = useAppStore((s) => s.addMessage);
   const clearMessages = useAppStore((s) => s.clearMessages);
+  const saveMeeting = useAppStore((s) => s.saveMeeting);
   const showToast = useAppStore((s) => s.showToast);
 
   const [phase, setPhase] = useState<Phase>('setup');
@@ -345,6 +346,14 @@ export default function AiPage() {
 
   const handleEnd = () => {
     stop();
+    if (transcriptRef.current.length > 0) {
+      saveMeeting({
+        topic: meetingContextRef.current,
+        teamSummary: teamSummaryRef.current,
+        transcript: transcriptRef.current,
+        aiMessages: messages.filter((m) => m.role === 'ai').slice(1),
+      });
+    }
     setSummaryView(null);
     setSummaryContent('');
     setPhase('summary');

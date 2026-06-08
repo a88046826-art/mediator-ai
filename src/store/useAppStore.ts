@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { CodeType, TeamMember, TestResult, Message } from '@/types';
+import type { CodeType, TeamMember, TestResult, Message, MeetingRecord } from '@/types';
 
 interface Toast {
   id: string;
@@ -15,6 +15,7 @@ interface AppState {
   teamMembers: TeamMember[];
   messages: Message[];
   meetingContext: string;
+  meetingHistory: MeetingRecord[];
   toast: Toast | null;
 
   setTestResult: (result: TestResult) => void;
@@ -29,6 +30,9 @@ interface AppState {
 
   setMeetingContext: (ctx: string) => void;
 
+  saveMeeting: (record: Omit<MeetingRecord, 'id' | 'date'>) => void;
+  deleteMeeting: (id: string) => void;
+
   showToast: (message: string, type?: Toast['type']) => void;
   hideToast: () => void;
 }
@@ -40,6 +44,7 @@ export const useAppStore = create<AppState>()(
       teamMembers: [],
       messages: [],
       meetingContext: '',
+      meetingHistory: [],
       toast: null,
 
       setTestResult: (result) => set({ testResult: result }),
@@ -60,6 +65,20 @@ export const useAppStore = create<AppState>()(
 
       setMeetingContext: (ctx) => set({ meetingContext: ctx }),
 
+      saveMeeting: (record) =>
+        set((s) => {
+          const newRecord: MeetingRecord = {
+            ...record,
+            id: Date.now().toString(),
+            date: new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }),
+          };
+          // 최대 20개 유지
+          const updated = [newRecord, ...s.meetingHistory].slice(0, 20);
+          return { meetingHistory: updated };
+        }),
+      deleteMeeting: (id) =>
+        set((s) => ({ meetingHistory: s.meetingHistory.filter((r) => r.id !== id) })),
+
       showToast: (message, type = 'info') => {
         const id = Date.now().toString();
         set({ toast: { id, message, type } });
@@ -72,6 +91,7 @@ export const useAppStore = create<AppState>()(
       partialize: (s) => ({
         testResult: s.testResult,
         teamMembers: s.teamMembers,
+        meetingHistory: s.meetingHistory,
       }),
     }
   )
