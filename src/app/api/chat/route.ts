@@ -7,7 +7,7 @@ const ALLOWED_ORIGINS = [
   'http://localhost:3001',
 ];
 
-const MAX_TOKENS_CAP = 2000;
+const MAX_TOKENS_CAP = 3000;
 const MAX_PAYLOAD_BYTES = 30_000;
 
 export async function POST(req: NextRequest) {
