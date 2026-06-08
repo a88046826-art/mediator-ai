@@ -29,10 +29,12 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
   useEffect(() => { onErrorRef.current = onError; }, [onError]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recRef = useRef<any>(null);
   const userStoppedRef = useRef(false);
   const isListeningRef = useRef(false);
   const noSpeechRef = useRef(false);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
   // session ID prevents stale onresult from a previous session firing after restart
   const sessionIdRef = useRef(0);
 
@@ -126,22 +128,30 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
     }
   }, []);
 
-  const start = useCallback(() => {
+  const start = useCallback(async () => {
     if (isListeningRef.current) return;
-    userStoppedRef.current = false;
-    isListeningRef.current = true;
-    setIsListening(true);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const w = window as any;
     const SpeechRec = w.SpeechRecognition ?? w.webkitSpeechRecognition;
     if (!SpeechRec) {
       onErrorRef.current?.('이 브라우저는 음성 인식을 지원하지 않습니다. Chrome을 사용해 주세요.');
-      isListeningRef.current = false;
-      setIsListening(false);
       return;
     }
 
+    // 마이크 권한을 미리 한 번만 획득 — Android에서 재시작 시 팝업 반복 방지
+    if (!mediaStreamRef.current) {
+      try {
+        mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch {
+        onErrorRef.current?.('마이크 권한을 허용해 주세요.');
+        return;
+      }
+    }
+
+    userStoppedRef.current = false;
+    isListeningRef.current = true;
+    setIsListening(true);
     createAndStart();
   }, [createAndStart]);
 
@@ -153,6 +163,9 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
     onInterimRef.current?.('');
     try { recRef.current?.stop(); } catch { /* ignore */ }
     recRef.current = null;
+    // 마이크 스트림 해제
+    mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+    mediaStreamRef.current = null;
   }, []);
 
   const toggle = useCallback(() => {
