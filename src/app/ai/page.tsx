@@ -53,7 +53,7 @@ ${transcriptText}
 개입 시 해당 패턴 이모지와 이름 먼저, 2-3문장 중재. 한국어.`;
 }
 
-type SummaryView = null | 'analysis' | 'next-topic' | 'mvp';
+type SummaryView = null | 'analysis' | 'next-topic';
 
 function buildAnalysisPrompt(teamSummary: string, context: string, transcriptText: string, aiInterventions: string): string {
   return `당신은 팀 회의 분석 전문가입니다.
@@ -121,37 +121,6 @@ ${transcriptText || '(대화 내용 없음)'}
 한국어.`;
 }
 
-function buildMvpPrompt(teamSummary: string, context: string, transcriptText: string): string {
-  return `당신은 팀 성과 코치입니다.
-
-팀 구성: ${teamSummary || '등록된 팀원 없음'}
-회의 주제: ${context || '없음'}
-
-CODE 프레임워크:
-- D (Disruptor): 실행력, 결단 → 아이디어 추진, 빠른 결정 기여
-- O (Outreacher): 비전, 에너지 → 팀 동기부여, 가능성 제시
-- C (Coordinator): 조율, 공감 → 갈등 중재, 팀 분위기 관리
-- E (Evaluator): 분석, 검증 → 리스크 지적, 근거 제시
-
-=== 대화 기록 ===
-${transcriptText || '(대화 내용 없음)'}
-
-이번 회의의 MVP를 CODE 성향 기반으로 선정하고 평가하세요.
-
-## 🏆 이번 회의 MVP
-MVP 이름과 선정 이유 (2-3문장)
-
-## 📊 팀원별 기여 평가
-각 팀원의 CODE 성향에 맞는 기여 포인트와 한 줄 피드백
-
-## 🌟 팀 전체 칭찬
-이번 회의에서 팀으로서 잘한 점 1-2가지
-
-## 💪 다음 회의를 위한 제안
-각 팀원이 자신의 성향을 더 잘 발휘할 수 있는 팁 한 줄씩
-
-팀원이 없으면 일반적인 기여도 분석. 한국어.`;
-}
 
 function buildAlertPrompt(teamSummary: string, context: string, recentTranscript: string, category: ConflictCategory): string {
   return `당신은 실시간 회의 AI 중재자입니다.
@@ -422,7 +391,6 @@ export default function AiPage() {
       let prompt = '';
       if (view === 'analysis') prompt = buildAnalysisPrompt(teamSummaryRef.current, meetingContextRef.current, transcriptText, aiInterventions);
       else if (view === 'next-topic') prompt = buildNextTopicsPrompt(teamSummaryRef.current, meetingContextRef.current, transcriptText);
-      else if (view === 'mvp') prompt = buildMvpPrompt(teamSummaryRef.current, meetingContextRef.current, transcriptText);
       const result = await callApi(prompt, '분석해주세요.', 1500);
       setSummaryContent(result);
     } catch {
@@ -483,14 +451,6 @@ export default function AiPage() {
         desc: '우선순위 · 예상 시간 · 준비사항',
         color: 'from-blue-500/20 to-blue-500/5 border-blue-500/30 hover:border-blue-400/60',
         textColor: 'text-blue-300',
-      },
-      {
-        key: 'mvp' as const,
-        emoji: '🏆',
-        title: '이번 회의 MVP 보기',
-        desc: 'CODE 성향 기반 팀원별 기여 평가',
-        color: 'from-amber-500/20 to-amber-500/5 border-amber-500/30 hover:border-amber-400/60',
-        textColor: 'text-amber-300',
       },
     ];
 
