@@ -4,7 +4,6 @@ import { useState, useRef, useCallback } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import type { Message } from '@/types';
 import { codeInfo, typeData } from '@/data/typeData';
-import { detectConflict, type ConflictCategory } from '@/data/conflictPatterns';
 import type { CodeType } from '@/types';
 import { MeetingSetup } from '@/components/ai/MeetingSetup';
 import { ChatWindow } from '@/components/ai/ChatWindow';
@@ -122,28 +121,6 @@ ${transcriptText || '(대화 내용 없음)'}
 }
 
 
-function buildAlertPrompt(teamSummary: string, context: string, recentTranscript: string, category: ConflictCategory): string {
-  return `당신은 실시간 회의 AI 중재자입니다.
-
-팀 구성: ${teamSummary || '등록된 팀원 없음'}
-회의 주제: ${context || '없음'}
-
-${category.emoji} 감지된 패턴: "${category.name}" — ${category.desc}
-
-최근 대화:
-${recentTranscript}
-
-"${category.name}" 패턴이 감지됐습니다. 팀 성향을 고려해 즉시 중재하세요.
-- 직접적 공격(🔴)·관계갈등(🔶)·자기중심(🟥): 감정을 먼저 인정하고 대화 톤 전환
-- 책임회피(🔵)·소극적참여(🟫): 구체적 역할과 의견을 부드럽게 요청
-- 발산혼란(🟢)·분석마비(🟧): 현재 아젠다로 수렴하도록 안내
-- 에너지저하(⚫)·비교·경쟁(🟣): 팀 강점과 가능성을 상기
-- 수동공격(🟠)·애매모호(🟤): 숨겨진 불만을 직접 표현하도록 유도
-- 기타 패턴: 패턴 특성에 맞게 건설적으로 전환
-
-응답 형식: "${category.emoji} ${category.name}\n[2-3문장의 구체적 중재 메시지]"
-맥락상 명백히 문제없는 경우에만 SKIP. 한국어.`;
-}
 
 async function callApi(system: string, userContent: string, maxTokens = 1024): Promise<string> {
   const res = await fetch('/api/chat', {
@@ -198,20 +175,16 @@ export default function AiPage() {
   const teamSummaryRef = useRef('');
   teamSummaryRef.current = teamSummary;
 
-  const runAnalysis = useCallback(async (entries: TranscriptEntry[], category?: ConflictCategory) => {
+  const runAnalysis = useCallback(async (entries: TranscriptEntry[]) => {
     if (isAnalyzingRef.current || entries.length === 0) return;
     isAnalyzingRef.current = true;
     setIsAnalyzing(true);
     try {
-      // for category alerts use last 8 entries for focused context; periodic checks use all
-      const contextEntries = category ? entries.slice(-8) : entries;
-      const transcriptText = contextEntries
+      const transcriptText = entries
         .map((e) => `[${e.time}] ${e.speaker ? `${e.speaker}: ` : ''}${e.text}`)
         .join('\n');
 
-      const systemPrompt = category
-        ? buildAlertPrompt(teamSummaryRef.current, meetingContextRef.current, transcriptText, category)
-        : buildAutoPrompt(teamSummaryRef.current, meetingContextRef.current, transcriptText);
+      const systemPrompt = buildAutoPrompt(teamSummaryRef.current, meetingContextRef.current, transcriptText);
 
       const result = await callApi(systemPrompt, '위 대화를 분석해주세요.', 512);
 
@@ -261,13 +234,9 @@ export default function AiPage() {
     transcriptRef.current = next;
     setTranscript(next);
 
-    const detectedCategory = detectConflict(text);
-
-    // 패턴 감지 시 즉시 분석, 그 외엔 5문장마다 주기 분석
-    const threshold = detectedCategory ? 0 : 5;
-    if (detectedCategory || next.length - lastAnalyzedCountRef.current >= threshold) {
+    if (next.length - lastAnalyzedCountRef.current >= 3) {
       lastAnalyzedCountRef.current = next.length;
-      runAnalysis(next, detectedCategory ?? undefined);
+      runAnalysis(next);
     }
   }, [runAnalysis]);
 
