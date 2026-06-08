@@ -359,16 +359,6 @@ export default function AiPage() {
 
   const handleEnd = () => {
     stop();
-    if (transcriptRef.current.length === 0) {
-      clearMessages();
-      setTranscript([]);
-      setInterimText('');
-      setCurrentSpeaker('');
-      transcriptRef.current = [];
-      lastAnalyzedCountRef.current = 0;
-      setPhase('setup');
-      return;
-    }
     setSummaryView(null);
     setSummaryContent('');
     setPhase('summary');
