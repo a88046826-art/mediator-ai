@@ -538,6 +538,12 @@ export default function AiPage() {
                   </svg>
                 </button>
               ))}
+              <button
+                onClick={handleNewMeeting}
+                className="w-full py-3 rounded-2xl border border-border text-sm text-slate-500 hover:text-red-400 hover:border-red-500/30 transition-all"
+              >
+                종료하기
+              </button>
             </div>
           </>
         )}
