@@ -1,20 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 
+const ALLOWED_ORIGINS = [
+  'https://mediator-ai-eight.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:3001',
+];
+
+const MAX_TOKENS_CAP = 2000;
+const MAX_PAYLOAD_BYTES = 30_000;
+
 export async function POST(req: NextRequest) {
+  // Origin 검사 — 외부 호출 차단
+  const origin = req.headers.get('origin') ?? '';
+  const isAllowed =
+    ALLOWED_ORIGINS.some((o) => origin === o) ||
+    origin.endsWith('.vercel.app');
+  if (!isAllowed) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
   try {
     if (!process.env.ANTHROPIC_API_KEY) {
       return NextResponse.json({ error: 'ANTHROPIC_API_KEY가 설정되지 않았습니다.' }, { status: 500 });
     }
 
-    const { system, messages, maxTokens } = await req.json();
+    const raw = await req.text();
+    if (raw.length > MAX_PAYLOAD_BYTES) {
+      return NextResponse.json({ error: '요청이 너무 큽니다.' }, { status: 413 });
+    }
+
+    const { system, messages, maxTokens } = JSON.parse(raw);
     const userMessage = messages.find((m: { role: string }) => m.role === 'user')?.content ?? '';
 
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: maxTokens ?? 1024,
+      max_tokens: Math.min(maxTokens ?? 1024, MAX_TOKENS_CAP),
       system,
       messages: [{ role: 'user', content: userMessage }],
     });

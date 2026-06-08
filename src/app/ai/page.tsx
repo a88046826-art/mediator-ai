@@ -160,6 +160,8 @@ export default function AiPage() {
 
   const lastAnalyzedCountRef = useRef(0);
   const isAnalyzingRef = useRef(false);
+  const sessionCallCountRef = useRef(0);
+  const MAX_SESSION_CALLS = 30;
   const meetingContextRef = useRef('');
   meetingContextRef.current = meetingContext;
   // transcriptRef stays in sync so handleVoiceResult never captures stale state
@@ -178,6 +180,8 @@ export default function AiPage() {
 
   const runAnalysis = useCallback(async (entries: TranscriptEntry[]) => {
     if (isAnalyzingRef.current || entries.length === 0) return;
+    if (sessionCallCountRef.current >= MAX_SESSION_CALLS) return;
+    sessionCallCountRef.current++;
     isAnalyzingRef.current = true;
     setIsAnalyzing(true);
     try {
@@ -235,7 +239,9 @@ export default function AiPage() {
     transcriptRef.current = next;
     setTranscript(next);
 
-    if (next.length - lastAnalyzedCountRef.current >= 3) {
+    // 최근 3개 발화 합산 텍스트가 20자 이상일 때만 분석 (짧은 추임새 제외)
+    const recentText = next.slice(-3).map((e) => e.text).join(' ');
+    if (next.length - lastAnalyzedCountRef.current >= 3 && recentText.length >= 20) {
       lastAnalyzedCountRef.current = next.length;
       runAnalysis(next);
     }
@@ -394,6 +400,7 @@ export default function AiPage() {
     setSummaryContent('');
     transcriptRef.current = [];
     lastAnalyzedCountRef.current = 0;
+    sessionCallCountRef.current = 0;
     setPhase('setup');
   };
 
