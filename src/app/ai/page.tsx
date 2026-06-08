@@ -247,8 +247,11 @@ export default function AiPage() {
 
     let next: TranscriptEntry[];
     if (lastEntry && withinWindow && sameSpeaker) {
-      // 짧은 침묵 후 이어 말한 경우 — 같은 줄에 합치기
-      const merged = { ...lastEntry, text: lastEntry.text + ' ' + text };
+      // Android Chrome continuous 모드: 새 final이 이전 텍스트를 포함하면 교체(누적 방지)
+      const prevText = lastEntry.text.trim();
+      const merged = text.startsWith(prevText)
+        ? { ...lastEntry, text }
+        : { ...lastEntry, text: prevText + ' ' + text };
       next = [...prev.slice(0, -1), merged];
     } else {
       next = [...prev, { id: Date.now().toString(), text, time, speaker }];
