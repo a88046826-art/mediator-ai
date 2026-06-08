@@ -37,96 +37,85 @@ CODE 프레임워크:
 }
 
 function buildAutoPrompt(teamSummary: string, context: string, transcriptText: string): string {
-  return `당신은 실시간 회의를 모니터링하는 AI 중재자입니다.
+  return `당신은 실시간 회의를 조용히 모니터링하는 중재자입니다.
 
-팀 구성: ${teamSummary || '등록된 팀원 없음'}
+팀 구성: ${teamSummary || '없음'}
 회의 주제: ${context || '없음'}
 
 대화 내용:
 ${transcriptText}
 
-CODE 프레임워크:
-- D: 빠른 실행, 결단 / O: 비전, 동기 / C: 조율, 관계 / E: 분석, 체계
+개입 기준 — 아래 상황에서만 말하세요. 웬만하면 SKIP:
+- 감정적 충돌이나 공격적 언어가 명확히 보일 때
+- 대화가 완전히 다른 방향으로 흘러 회의가 무의미해질 때
+- 중요한 결정이 내려지는데 반대 의견이 묻히고 있을 때
+- 에너지가 눈에 띄게 떨어지거나 아무도 말을 안 할 때
 
-아래 패턴이 보이면 개입하세요:
-🔴공격·적대 | 🟠수동공격 | 🟡회의구조파괴 | 🟢발산혼란 | 🔵책임회피
-🟣비교·경쟁 | ⚫에너지저하 | 🟤애매모호 | 🔶관계갈등 | 🟥자기중심
-🟧분석마비 | 🟫소극적참여 | 🔷과도한낙관 | 🔸외부요인탓
-📌중요한 결정이 내려지는 순간
+위 상황이 아니면 반드시 "SKIP"만 반환.
 
-개입 시 형식:
-[패턴 이모지 + 이름]
-[상황 1문장]
-[이 팀에 있는 성향별 제안 — "D 성향인 분은 ~, E 성향인 분은 ~" 형식]
-[구체적 다음 행동 1가지]
-
-패턴 없고 일반 대화면 반드시 "SKIP"만 반환. 한국어.`;
+개입할 때:
+- 자연스럽고 따뜻한 말투로, 3문장 이내
+- CODE 성향 언급은 꼭 필요할 때만, 강요하지 않기
+- 구체적인 다음 행동 하나만 제안
+한국어.`;
 }
 
 type SummaryView = null | 'analysis' | 'next-topic';
 
 function buildAnalysisPrompt(teamSummary: string, context: string, transcriptText: string, aiInterventions: string): string {
-  return `당신은 팀 회의 분석 전문가입니다.
+  return `당신은 팀 회의 분석가입니다.
 
-팀 구성: ${teamSummary || '등록된 팀원 없음'}
+팀 구성: ${teamSummary || '없음'}
 회의 주제: ${context || '없음'}
 
-CODE 프레임워크:
-- D (Disruptor): 빠른 실행, 결단력
-- O (Outreacher): 비전, 네트워킹
-- C (Coordinator): 조율, 소통
-- E (Evaluator): 분석, 체계
-- 복합 유형(DC 등)은 두 성향 모두 반영
+=== 대화 기록 ===
+${transcriptText || '(없음)'}
 
-=== 전체 대화 기록 ===
-${transcriptText || '(대화 내용 없음)'}
+=== AI 개입 내역 ===
+${aiInterventions || '(없음)'}
 
-=== AI 중재 개입 내역 ===
-${aiInterventions || '(AI 개입 없음)'}
-
-아래 형식으로 회의 결과를 분석하세요:
+아래 형식으로 분석하세요. CODE 성향은 자연스럽게 녹여 쓰고, 억지로 끼워 넣지 마세요.
 
 ## 📋 주요 논의 사항
-핵심 논의 내용 불릿으로 (2-4개)
+핵심 내용 불릿 2-4개
 
 ## ✅ 내려진 결정
-확정된 결정사항 불릿. 없으면 "확정된 결정 없음"
+확정된 것. 없으면 "확정된 결정 없음"
 
 ## ❓ 미해결 항목
-결론 못 낸 사항 불릿. 없으면 "미해결 항목 없음"
+결론 못 낸 것. 없으면 "없음"
 
-## 🧭 팀 역학 분석
-갈등 패턴, 소통 방식, 분위기 등 한 문단 평가
+## 🧭 팀 소통 흐름
+이번 회의에서 팀이 어떻게 소통했는지 자연스럽게 평가. 팀 구성원의 성향이 대화에서 드러났다면 자연스럽게 언급.
 
-## 🔥 즉시 할 일
-구체적 다음 액션 2-3개
+## 🔥 다음 액션
+구체적 행동 2-3개
 
-한국어. 대화가 부족해도 최대한 분석.`;
+한국어.`;
 }
 
 function buildNextTopicsPrompt(teamSummary: string, context: string, transcriptText: string): string {
   return `당신은 팀 회의 퍼실리테이터입니다.
 
-팀 구성: ${teamSummary || '등록된 팀원 없음'}
+팀 구성: ${teamSummary || '없음'}
 이번 회의 주제: ${context || '없음'}
 
 === 대화 기록 ===
-${transcriptText || '(대화 내용 없음)'}
+${transcriptText || '(없음)'}
 
-이번 회의 내용을 바탕으로 다음 회의에서 다뤄야 할 주제를 추천하세요.
+이번 회의를 바탕으로 다음 회의 주제 3가지를 추천하세요.
 
-## 🎯 추천 주제 (우선순위 순)
+## 🎯 추천 주제
 
-각 주제마다 아래 형식으로:
 **1. [주제명]**
-- 이유: 이번 회의에서 연결되는 맥락
+- 이유: 이번 회의와 연결되는 맥락
 - 예상 소요: XX분
-- 사전 준비: 필요한 준비사항
+- 준비: 필요한 것
 
-(3가지 추천)
+(동일 형식으로 3가지)
 
-## 💡 다음 회의 진행 팁
-팀 성향을 고려한 회의 운영 제안 1-2가지
+## 💡 진행 팁
+이 팀이 다음 회의를 더 잘 하려면 — 팀 구성원 성향을 자연스럽게 고려해서 1-2가지
 
 한국어.`;
 }
@@ -524,12 +513,20 @@ export default function AiPage() {
         {/* header */}
         <div className="flex items-center justify-between mb-2">
           <h1 className="text-xl font-bold text-slate-200">회의 종료</h1>
-          <button
-            onClick={handleNewMeeting}
-            className="px-3 py-1.5 text-xs rounded-lg border border-border text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-colors"
-          >
-            새 회의 시작
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPhase('meeting')}
+              className="px-3 py-1.5 text-xs rounded-lg border border-border text-slate-400 hover:text-accent hover:border-accent/40 transition-colors"
+            >
+              ← 회의로 돌아가기
+            </button>
+            <button
+              onClick={handleNewMeeting}
+              className="px-3 py-1.5 text-xs rounded-lg border border-border text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-colors"
+            >
+              새 회의 시작
+            </button>
+          </div>
         </div>
         {meetingContextRef.current && (
           <p className="text-xs text-slate-500 mb-5">{meetingContextRef.current}</p>
