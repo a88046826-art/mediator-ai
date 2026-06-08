@@ -60,16 +60,20 @@ export default function ResultPage() {
       <ResultHero result={result} />
       <ResultGrid result={result} />
 
-      <div className="flex flex-col sm:flex-row gap-3 mt-8">
-        <button className="btn-secondary flex-1 text-sm" onClick={() => setModalOpen(true)}>
-          팀에 추가하기
+      <div className="flex flex-col gap-3 mt-8">
+        {/* 1단계: 메인 액션 */}
+        <button className="btn-primary w-full py-4 text-sm" onClick={() => setModalOpen(true)}>
+          팀에 추가하고 초대 링크 받기 →
         </button>
-        <Link href="/ai" className="btn-primary flex-1 text-sm text-center">
-          AI 중재 받기
-        </Link>
-        <Link href="/test" className="btn-secondary flex-1 text-sm text-center">
-          다시 하기
-        </Link>
+        {/* 2단계, 3단계: 보조 */}
+        <div className="flex gap-3">
+          <Link href="/ai" className="btn-secondary flex-1 text-sm text-center py-2.5">
+            AI 중재 시작하기
+          </Link>
+          <Link href="/test/code" className="btn-secondary flex-1 text-sm text-center py-2.5">
+            다시 하기
+          </Link>
+        </div>
       </div>
 
       {modalOpen && (

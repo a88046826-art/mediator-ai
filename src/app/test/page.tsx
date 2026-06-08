@@ -53,7 +53,7 @@ export default function TestHubPage() {
             <p className="text-sm font-medium text-slate-400 group-hover:text-slate-200 transition-colors">
               철학자 성향 진단
             </p>
-            <p className="text-xs text-slate-600">나와 닮은 철학자 찾기 · 재미로 해보기</p>
+            <p className="text-xs text-slate-600">나와 닮은 동서양 철학자 찾기</p>
           </div>
           <span className="text-slate-600 group-hover:text-slate-400 text-sm">→</span>
         </Link>
