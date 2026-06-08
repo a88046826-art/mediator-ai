@@ -32,6 +32,7 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
   const recRef = useRef<any>(null);
   const userStoppedRef = useRef(false);
   const isListeningRef = useRef(false);
+  const noSpeechRef = useRef(false);
   // session ID prevents stale onresult from a previous session firing after restart
   const sessionIdRef = useRef(0);
 
@@ -88,7 +89,10 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     rec.onerror = (e: any) => {
       if (mySession !== sessionIdRef.current) return;
-      if (e.error === 'no-speech') return;
+      if (e.error === 'no-speech') {
+        noSpeechRef.current = true;
+        return;
+      }
       const msg =
         e.error === 'not-allowed' ? '마이크 권한을 허용해 주세요.' :
         e.error === 'network'     ? '네트워크 오류가 발생했습니다.' :
@@ -101,8 +105,12 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
       recRef.current = null;
       onInterimRef.current?.('');
       if (!userStoppedRef.current && isListeningRef.current) {
-        createAndStart();
+        // no-speech 후엔 500ms 딜레이로 권한 팝업 반복 방지
+        const delay = noSpeechRef.current ? 500 : 0;
+        noSpeechRef.current = false;
+        setTimeout(createAndStart, delay);
       } else {
+        noSpeechRef.current = false;
         isListeningRef.current = false;
         setIsListening(false);
       }
