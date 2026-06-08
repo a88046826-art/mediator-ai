@@ -77,6 +77,17 @@ ${transcriptText}
 
 type SummaryView = null | 'analysis' | 'next-topic';
 
+function buildUrgentCheckPrompt(recentLines: string): string {
+  return `당신은 회의 중재자입니다. 아래 발언에 욕설·인신공격·심한 감정 폭발이 있는지 판단하세요.
+
+${recentLines}
+
+판단 기준: 명백한 욕설, 인신공격, 심한 감정 폭발만 해당입니다. 강한 어조나 일반적인 불만 표현은 해당 없음.
+- 해당 없으면: SKIP
+- 해당 있으면: ⚡로 시작하는 즉각 중재 1-2문장 (차분하고 따뜻하게 분위기 완화)
+한국어.`;
+}
+
 function buildAnalysisPrompt(teamSummary: string, context: string, transcriptText: string, aiInterventions: string): string {
   const hasSpeakers = transcriptText.includes(': ');
   const speakerNote = hasSpeakers
@@ -261,6 +272,9 @@ export default function AiPage() {
   const sessionCallCountRef = useRef(0);
   const MAX_SESSION_CALLS = 30;
   const analysisFailCountRef = useRef(0);
+  const isUrgentCheckingRef = useRef(false);
+  const urgentCallCountRef = useRef(0);
+  const MAX_URGENT_CALLS = 50;
   const meetingContextRef = useRef('');
   meetingContextRef.current = meetingContext;
   // transcriptRef stays in sync so handleVoiceResult never captures stale state
@@ -312,6 +326,41 @@ export default function AiPage() {
     }
   }, [addMessage]);
 
+  const runUrgentCheck = useCallback(async (entries: TranscriptEntry[]) => {
+    const latest = entries[entries.length - 1];
+    if (!latest || latest.text.length < 8) return;
+    if (isUrgentCheckingRef.current) return;
+    if (urgentCallCountRef.current >= MAX_URGENT_CALLS) return;
+
+    urgentCallCountRef.current++;
+    isUrgentCheckingRef.current = true;
+    try {
+      const recentLines = entries
+        .slice(-2)
+        .map((e) => `${e.speaker ? `${e.speaker}: ` : ''}${e.text}`)
+        .join('\n');
+
+      const result = await callApi(buildUrgentCheckPrompt(recentLines), '판단해주세요.', 100);
+
+      if (result.trim() === 'SKIP' || !result.startsWith('⚡')) return;
+
+      addMessage({
+        id: Date.now().toString(),
+        role: 'ai',
+        content: result,
+        timestamp: new Date().toISOString(),
+        isAlert: true,
+      });
+      setActiveTab('ai');
+      setAiError(false);
+      analysisFailCountRef.current = 0;
+    } catch {
+      // urgent check 실패는 조용히 무시
+    } finally {
+      isUrgentCheckingRef.current = false;
+    }
+  }, [addMessage]);
+
   const MERGE_WINDOW_MS = 1500;
 
   const handleVoiceResult = useCallback((text: string) => {
@@ -341,13 +390,16 @@ export default function AiPage() {
     transcriptRef.current = next;
     setTranscript(next);
 
-    // 최근 3개 발화 합산 텍스트가 20자 이상일 때만 분석 (짧은 추임새 제외)
+    // 매 발화: 욕설·공격적 언어 즉각 감지
+    runUrgentCheck(next);
+
+    // 3발화마다: 일반 흐름 분석 (최근 텍스트 합산 20자 이상일 때만)
     const recentText = next.slice(-3).map((e) => e.text).join(' ');
     if (next.length - lastAnalyzedCountRef.current >= 3 && recentText.length >= 20) {
       lastAnalyzedCountRef.current = next.length;
       runAnalysis(next);
     }
-  }, [runAnalysis]);
+  }, [runAnalysis, runUrgentCheck]);
 
   const { isListening, isSupported, toggle, stop } = useVoiceRecognition({
     onResult: handleVoiceResult,
@@ -550,6 +602,7 @@ export default function AiPage() {
     transcriptRef.current = [];
     lastAnalyzedCountRef.current = 0;
     sessionCallCountRef.current = 0;
+    urgentCallCountRef.current = 0;
     setPhase('setup');
   };
 
