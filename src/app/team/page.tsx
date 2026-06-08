@@ -7,6 +7,7 @@ import { codeInfo } from '@/data/typeData';
 import { MemberRow } from '@/components/team/MemberRow';
 import { TeamRadarChart } from '@/components/team/TeamRadarChart';
 import { TeamInsight } from '@/components/team/TeamInsight';
+import { decodeShareCode } from '@/lib/shareCode';
 
 const CODES: CodeType[] = ['D', 'O', 'C', 'E'];
 
@@ -19,6 +20,8 @@ export default function TeamPage() {
 
   const [name, setName] = useState('');
   const [code, setCode] = useState<CodeType>('D');
+  const [joinCode, setJoinCode] = useState('');
+  const [joinError, setJoinError] = useState('');
 
   const handleAdd = () => {
     if (!name.trim()) {
@@ -30,6 +33,18 @@ export default function TeamPage() {
     setName('');
   };
 
+  const handleCodeAdd = () => {
+    setJoinError('');
+    const decoded = decodeShareCode(joinCode);
+    if (!decoded) {
+      setJoinError('올바르지 않은 코드예요');
+      return;
+    }
+    addTeamMember({ id: Date.now().toString(), name: decoded.name, code: decoded.typeKey });
+    showToast(`${decoded.name} 추가됨!`, 'success');
+    setJoinCode('');
+  };
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-10">
       <h1 className="text-2xl font-bold mb-2">팀 구성 분석</h1>
@@ -38,8 +53,25 @@ export default function TeamPage() {
       <div className="grid md:grid-cols-2 gap-6">
         {/* Left: add & list */}
         <div className="space-y-4">
+          {/* 코드로 추가 */}
           <div className="card space-y-3">
-            <h3 className="font-semibold text-slate-200">팀원 추가</h3>
+            <h3 className="font-semibold text-slate-200">코드로 추가</h3>
+            <p className="text-xs text-slate-500">팀원이 성향테스트 후 공유한 코드를 입력하세요</p>
+            <div className="flex gap-2">
+              <input
+                className="input-base flex-1 text-sm font-mono"
+                placeholder="공유 코드 붙여넣기"
+                value={joinCode}
+                onChange={(e) => { setJoinCode(e.target.value); setJoinError(''); }}
+                onKeyDown={(e) => e.key === 'Enter' && handleCodeAdd()}
+              />
+              <button className="btn-primary px-4 text-sm shrink-0" onClick={handleCodeAdd}>추가</button>
+            </div>
+            {joinError && <p className="text-xs text-red-400">{joinError}</p>}
+          </div>
+
+          <div className="card space-y-3">
+            <h3 className="font-semibold text-slate-200">직접 추가</h3>
             <input
               className="input-base w-full text-sm"
               placeholder="팀원 이름"

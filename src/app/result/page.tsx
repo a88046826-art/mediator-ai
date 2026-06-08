@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAppStore } from '@/store/useAppStore';
 import { ResultHero } from '@/components/result/ResultHero';
 import { ResultGrid } from '@/components/result/ResultGrid';
+import { generateShareCode } from '@/lib/shareCode';
 
 export default function ResultPage() {
   const router = useRouter();
@@ -15,6 +16,7 @@ export default function ResultPage() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [name, setName] = useState('');
+  const [shareCode, setShareCode] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -24,6 +26,7 @@ export default function ResultPage() {
   useEffect(() => {
     if (modalOpen) {
       setName('');
+      setShareCode('');
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [modalOpen]);
@@ -32,9 +35,18 @@ export default function ResultPage() {
 
   const handleConfirm = () => {
     if (!name.trim()) return;
-    addTeamMember({ id: Date.now().toString(), name: name.trim(), code: result.typeKey });
-    showToast(`${name.trim()} 팀에 추가됨!`, 'success');
-    setModalOpen(false);
+    const trimmed = name.trim();
+    addTeamMember({ id: Date.now().toString(), name: trimmed, code: result.typeKey });
+    setShareCode(generateShareCode(trimmed, result.typeKey));
+  };
+
+  const handleCopyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(shareCode);
+      showToast('코드 복사됨!', 'success');
+    } catch {
+      showToast('복사 실패', 'error');
+    }
   };
 
   return (
@@ -59,37 +71,45 @@ export default function ResultPage() {
       {modalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          onClick={() => setModalOpen(false)}
+          onClick={() => !shareCode && setModalOpen(false)}
         >
           <div
-            className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-80 shadow-xl"
+            className="bg-surface rounded-2xl p-6 w-80 shadow-xl border border-border"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold mb-4">팀원 이름 입력</h2>
-            <input
-              ref={inputRef}
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleConfirm()}
-              placeholder="이름을 입력하세요"
-              className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <div className="flex gap-2 mt-4">
-              <button
-                className="btn-secondary flex-1 text-sm"
-                onClick={() => setModalOpen(false)}
-              >
-                취소
-              </button>
-              <button
-                className="btn-primary flex-1 text-sm"
-                onClick={handleConfirm}
-                disabled={!name.trim()}
-              >
-                추가
-              </button>
-            </div>
+            {!shareCode ? (
+              <>
+                <h2 className="text-lg font-semibold mb-1 text-slate-200">내 이름 입력</h2>
+                <p className="text-xs text-slate-500 mb-4">팀에서 표시될 이름을 입력하세요</p>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleConfirm()}
+                  placeholder="이름을 입력하세요"
+                  className="input-base w-full text-sm"
+                />
+                <div className="flex gap-2 mt-4">
+                  <button className="btn-secondary flex-1 text-sm" onClick={() => setModalOpen(false)}>취소</button>
+                  <button className="btn-primary flex-1 text-sm" onClick={handleConfirm} disabled={!name.trim()}>확인</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-center mb-4">
+                  <div className="text-2xl mb-2">✅</div>
+                  <h2 className="text-base font-semibold text-slate-200">팀에 추가됐어요!</h2>
+                  <p className="text-xs text-slate-500 mt-1">아래 코드를 팀원들에게 공유하세요</p>
+                </div>
+                <div className="bg-surface2 rounded-xl px-4 py-3 mb-3 border border-border">
+                  <p className="text-[10px] text-slate-500 mb-1">내 공유 코드</p>
+                  <p className="text-xs font-mono text-accent break-all">{shareCode}</p>
+                </div>
+                <button className="btn-primary w-full text-sm mb-2" onClick={handleCopyCode}>코드 복사</button>
+                <button className="btn-secondary w-full text-sm" onClick={() => setModalOpen(false)}>닫기</button>
+              </>
+            )}
           </div>
         </div>
       )}
