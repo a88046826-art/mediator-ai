@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useAppStore } from '@/store/useAppStore';
 import type { CodeType } from '@/types';
 import { codeInfo } from '@/data/typeData';
@@ -10,6 +11,29 @@ import { TeamInsight } from '@/components/team/TeamInsight';
 import { decodeShareCode } from '@/lib/shareCode';
 
 const CODES: CodeType[] = ['D', 'O', 'C', 'E'];
+
+function InviteCodeHandler() {
+  const searchParams = useSearchParams();
+  const addTeamMember = useAppStore((s) => s.addTeamMember);
+  const teamMembers = useAppStore((s) => s.teamMembers);
+  const showToast = useAppStore((s) => s.showToast);
+
+  useEffect(() => {
+    const urlCode = searchParams.get('code');
+    if (!urlCode) return;
+    const decoded = decodeShareCode(urlCode);
+    if (!decoded) return;
+    const alreadyIn = teamMembers.some((m) => m.name === decoded.name && m.code === decoded.typeKey);
+    if (!alreadyIn) {
+      addTeamMember({ id: Date.now().toString(), name: decoded.name, code: decoded.typeKey as CodeType });
+      showToast(`${decoded.name} 팀에 추가됐어요!`, 'success');
+    }
+    window.history.replaceState({}, '', '/team');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return null;
+}
 
 export default function TeamPage() {
   const teamMembers = useAppStore((s) => s.teamMembers);
@@ -47,6 +71,10 @@ export default function TeamPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-10">
+      <Suspense>
+        <InviteCodeHandler />
+      </Suspense>
+
       <h1 className="text-2xl font-bold mb-2">팀 구성 분석</h1>
       <p className="text-slate-400 text-sm mb-8">팀원을 추가하고 성향 균형을 확인하세요</p>
 

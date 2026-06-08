@@ -40,10 +40,14 @@ export default function ResultPage() {
     setShareCode(generateShareCode(trimmed, result.typeKey));
   };
 
+  const inviteUrl = shareCode
+    ? `${window.location.origin}/team?code=${shareCode}`
+    : '';
+
   const handleCopyCode = async () => {
     try {
-      await navigator.clipboard.writeText(shareCode);
-      showToast('코드 복사됨!', 'success');
+      await navigator.clipboard.writeText(inviteUrl);
+      showToast('초대 링크 복사됨!', 'success');
     } catch {
       showToast('복사 실패', 'error');
     }
@@ -100,13 +104,13 @@ export default function ResultPage() {
                 <div className="text-center mb-4">
                   <div className="text-2xl mb-2">✅</div>
                   <h2 className="text-base font-semibold text-slate-200">팀에 추가됐어요!</h2>
-                  <p className="text-xs text-slate-500 mt-1">아래 코드를 팀원들에게 공유하세요</p>
+                  <p className="text-xs text-slate-500 mt-1">링크를 팀원들에게 공유하세요</p>
                 </div>
                 <div className="bg-surface2 rounded-xl px-4 py-3 mb-3 border border-border">
-                  <p className="text-[10px] text-slate-500 mb-1">내 공유 코드</p>
-                  <p className="text-xs font-mono text-accent break-all">{shareCode}</p>
+                  <p className="text-[10px] text-slate-500 mb-1">초대 링크</p>
+                  <p className="text-xs font-mono text-accent break-all">{inviteUrl}</p>
                 </div>
-                <button className="btn-primary w-full text-sm mb-2" onClick={handleCopyCode}>코드 복사</button>
+                <button className="btn-primary w-full text-sm mb-2" onClick={handleCopyCode}>링크 복사</button>
                 <button className="btn-secondary w-full text-sm" onClick={() => setModalOpen(false)}>닫기</button>
               </>
             )}
