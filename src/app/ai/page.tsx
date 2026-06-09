@@ -313,7 +313,6 @@ export default function AiPage() {
   const urgentCallCountRef = useRef(0);
   const lastAnalyzedCountRef = useRef(0);
   const lastUrgentEntryIdRef = useRef('');
-  const lastTranscriptTimeRef = useRef(0); // 중복 방지: 마지막 저장 시각
   const meetingContextRef = useRef('');
   const teamSummaryRef = useRef('');
   const chatHistoryRef = useRef<ApiMessage[]>([]);
@@ -450,8 +449,6 @@ export default function AiPage() {
     }
     // 1.5초 이내 중복 발화 스킵 (auto-restart로 인한 재인식 방지)
     const now = Date.now();
-    if (now - lastTranscriptTimeRef.current < 1500) return;
-    lastTranscriptTimeRef.current = now;
     const nowDate = new Date(now);
     const time = `${String(nowDate.getHours()).padStart(2, '0')}:${String(nowDate.getMinutes()).padStart(2, '0')}`;
     const speaker = currentSpeakerRef.current || undefined;
