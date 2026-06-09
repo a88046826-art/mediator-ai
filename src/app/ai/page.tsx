@@ -5,7 +5,7 @@ import { useAppStore } from '@/store/useAppStore';
 import type { Message } from '@/types';
 import { MeetingSetup } from '@/components/ai/MeetingSetup';
 import { ChatWindow } from '@/components/ai/ChatWindow';
-import { LiveTranscript, type TranscriptEntry, COLOR_PALETTE } from '@/components/ai/LiveTranscript';
+import { LiveTranscript, type TranscriptEntry } from '@/components/ai/LiveTranscript';
 import { MeetingControls } from '@/components/ai/MeetingControls';
 import { useVoiceRecognition } from '@/hooks/useVoiceRecognition';
 import { useSession } from '@/hooks/useSession';
@@ -287,7 +287,6 @@ export default function AiPage() {
   const [interimText, setInterimText] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>('transcript');
-  const [currentSpeaker, setCurrentSpeaker] = useState('');
   const [summaryView, setSummaryView] = useState<SummaryView>(null);
   const [summaryContent, setSummaryContent] = useState('');
   const [isSummarizing, setIsSummarizing] = useState(false);
@@ -304,8 +303,6 @@ export default function AiPage() {
   const deviceIdRef = useRef('');
   const sessionCodeRef = useRef<string | null>(null);
   sessionCodeRef.current = sessionCode;
-  const currentSpeakerRef = useRef('');
-  currentSpeakerRef.current = currentSpeaker;
   const isAnalyzingRef = useRef(false);
   const sessionCallCountRef = useRef(0);
   const analysisFailCountRef = useRef(0);
@@ -451,13 +448,11 @@ export default function AiPage() {
     const now = Date.now();
     const nowDate = new Date(now);
     const time = `${String(nowDate.getHours()).padStart(2, '0')}:${String(nowDate.getMinutes()).padStart(2, '0')}`;
-    const speaker = currentSpeakerRef.current || undefined;
     try {
       // 원본 텍스트 즉시 저장 → 화면에 바로 표시
       const entryId = await fbAddTranscript(sessionCodeRef.current, {
         text,
         time,
-        speaker,
         createdAt: now,
       });
       // 백그라운드에서 Claude 교정 후 업데이트
@@ -878,7 +873,6 @@ export default function AiPage() {
       setShowJoinInput(false);
       setJoinError('');
       setInterimText('');
-      setCurrentSpeaker('');
       setSummaryView(null);
       setSummaryContent('');
       setChatInput('');
@@ -1007,11 +1001,6 @@ export default function AiPage() {
     time: e.time,
     speaker: e.speaker,
   }));
-
-  const speakerColors: Record<string, string> = {};
-  sessionMembers.forEach((m, i) => {
-    speakerColors[m.name] = COLOR_PALETTE[i % COLOR_PALETTE.length];
-  });
 
   const handleManualAsk = async () => {
     if (isAnalyzingRef.current || !sessionCodeRef.current) return;
@@ -1164,34 +1153,6 @@ export default function AiPage() {
         )}
       </div>
 
-      {/* speaker selector */}
-      {sessionMembers.length > 0 && (
-        <div className="shrink-0 flex items-center gap-2 px-4 py-2 border-b border-border/50 bg-surface overflow-x-auto">
-          <span className="text-[10px] text-slate-600 shrink-0">발화자</span>
-          <button
-            onClick={() => setCurrentSpeaker('')}
-            className={`shrink-0 px-2.5 py-1 rounded-full text-xs transition-colors ${
-              currentSpeaker === '' ? 'bg-slate-600 text-slate-200' : 'text-slate-500 hover:text-slate-300'
-            }`}
-          >
-            없음
-          </button>
-          {sessionMembers.map((m, i) => (
-            <button
-              key={m.id}
-              onClick={() => setCurrentSpeaker(m.name)}
-              className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                currentSpeaker === m.name
-                  ? `${COLOR_PALETTE[i % COLOR_PALETTE.length]} bg-white/10`
-                  : 'text-slate-500 hover:text-slate-300'
-              }`}
-            >
-              {m.name}
-            </button>
-          ))}
-        </div>
-      )}
-
       {/* mobile tab bar */}
       <div className="sm:hidden shrink-0 flex border-b border-border bg-surface">
         <button
@@ -1226,7 +1187,7 @@ export default function AiPage() {
           <div className="shrink-0 px-4 pt-3 pb-2 border-b border-border/40">
             <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">대화 기록</p>
           </div>
-          <LiveTranscript entries={displayTranscript} interimText={interimText} speakerColors={speakerColors} />
+          <LiveTranscript entries={displayTranscript} interimText={interimText} />
         </div>
 
         <div className={`flex-col overflow-hidden sm:flex sm:flex-1 ${activeTab === 'ai' ? 'flex flex-1' : 'hidden'}`}>
