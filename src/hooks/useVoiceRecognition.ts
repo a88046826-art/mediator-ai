@@ -34,6 +34,7 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
   const isListeningRef = useRef(false);
   const sessionIdRef = useRef(0);
   const nextFinalIndexRef = useRef(0);
+  const lastFinalTextRef = useRef(''); // 중복 방지: 마지막 처리된 텍스트
 
   const createAndStart = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -52,7 +53,6 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
 
     const rec = new SpeechRec();
     rec.lang = 'ko-KR';
-    // continuous: true — 세션을 유지해 Android에서 재시작 시 권한 팝업 반복 방지
     rec.continuous = true;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
@@ -73,7 +73,11 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
           if (i >= nextFinalIndexRef.current) {
             nextFinalIndexRef.current = i + 1;
             if (confidence === 0 || confidence >= MIN_CONFIDENCE) {
-              onResultRef.current(transcript);
+              // 직전 세션에서 이미 처리한 텍스트면 중복 스킵
+              if (transcript !== lastFinalTextRef.current) {
+                lastFinalTextRef.current = transcript;
+                onResultRef.current(transcript);
+              }
             }
             onInterimRef.current?.('');
           }
@@ -97,7 +101,6 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
       onErrorRef.current?.(msg);
     };
 
-    // continuous 모드에서도 네트워크 끊김 등으로 onEnd가 올 수 있음 — 재시작
     rec.onend = () => {
       if (mySession !== sessionIdRef.current) return;
       recRef.current = null;
@@ -130,6 +133,7 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
     }
     userStoppedRef.current = false;
     isListeningRef.current = true;
+    lastFinalTextRef.current = '';
     setIsListening(true);
     createAndStart();
   }, [createAndStart]);
@@ -147,6 +151,17 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
   const toggle = useCallback(() => {
     isListeningRef.current ? stop() : start();
   }, [start, stop]);
+
+  // 컴포넌트 언마운트 시 반드시 정리 — 없으면 다음 세션과 충돌
+  useEffect(() => {
+    return () => {
+      userStoppedRef.current = true;
+      isListeningRef.current = false;
+      sessionIdRef.current++; // 진행 중인 세션 무효화
+      try { recRef.current?.abort(); } catch { /* ignore */ }
+      recRef.current = null;
+    };
+  }, []);
 
   return { isListening, isSupported, toggle, stop };
 }
