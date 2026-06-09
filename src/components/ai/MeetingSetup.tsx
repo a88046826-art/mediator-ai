@@ -101,6 +101,7 @@ export function MeetingSetup({ members, onStart, onMessage }: Props) {
     setInterimText('');
     setIsLoading(true);
     onMessage?.('user', text);
+    setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 30);
 
     try {
       const reply = await askAi(next);
