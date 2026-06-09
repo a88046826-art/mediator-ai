@@ -413,24 +413,31 @@ export default function AiPage() {
   }, []);
 
   const handleVoiceResult = useCallback(async (text: string) => {
-    if (!sessionCodeRef.current) return;
+    if (!sessionCodeRef.current) {
+      showToast('세션 없음 — 방 코드를 확인하세요', 'error');
+      return;
+    }
     const now = new Date();
     const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     const speaker = currentSpeakerRef.current || undefined;
-    // 원본 텍스트 즉시 저장 → 화면에 바로 표시
-    const entryId = await fbAddTranscript(sessionCodeRef.current, {
-      text,
-      time,
-      speaker,
-      createdAt: now.getTime(),
-    });
-    // 백그라운드에서 Claude 교정 후 업데이트 (지연 없이 UX 유지)
-    const code = sessionCodeRef.current;
-    correctTranscript(text).then((corrected) => {
-      if (corrected !== text && code) {
-        fbUpdateTranscriptText(code, entryId, corrected);
-      }
-    });
+    try {
+      // 원본 텍스트 즉시 저장 → 화면에 바로 표시
+      const entryId = await fbAddTranscript(sessionCodeRef.current, {
+        text,
+        time,
+        speaker,
+        createdAt: now.getTime(),
+      });
+      // 백그라운드에서 Claude 교정 후 업데이트
+      const code = sessionCodeRef.current;
+      correctTranscript(text).then((corrected) => {
+        if (corrected !== text && code) {
+          fbUpdateTranscriptText(code, entryId, corrected);
+        }
+      });
+    } catch (err) {
+      showToast(`저장 오류: ${err instanceof Error ? err.message : String(err)}`, 'error');
+    }
   }, []);
 
   const { isListening, isSupported, toggle, stop } = useVoiceRecognition({
@@ -441,6 +448,11 @@ export default function AiPage() {
       else showToast(`음성 오류: ${err}`, 'error');
     },
   });
+
+  // 디버그: 음성 인식 지원 여부 확인
+  useEffect(() => {
+    if (!isSupported) showToast('이 브라우저는 음성 인식을 지원하지 않아요. Chrome을 사용해 주세요.', 'error');
+  }, [isSupported]);
 
   const handleChatSend = useCallback(async () => {
     const text = chatInput.trim();
