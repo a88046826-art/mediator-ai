@@ -214,13 +214,18 @@ ${transcriptText || '(아직 없음)'}
 }
 
 async function correctTranscript(text: string): Promise<string> {
+  // 너무 짧으면 교정 의미 없음
+  if (text.length < 5) return text;
   try {
     const result = await callApi(
-      '한국어 회의 발화를 교정하세요. "음", "어", "그러니까" 같은 필러는 제거하고 핵심 내용만 남기세요. 원문 의미를 유지하고 교정된 텍스트만 반환하세요. 추가 설명 없이.',
+      `다음 한국어 발화의 맞춤법과 띄어쓰기만 수정해서 반환하세요. 단어·내용·의미는 절대 바꾸지 마세요. 수정된 텍스트 한 줄만 반환하세요.`,
       text,
-      150,
+      Math.min(text.length * 3, 200),
     );
-    return result.trim() || text;
+    const trimmed = result.trim();
+    // Claude가 엉뚱한 긴 응답을 하면 원문 유지
+    if (!trimmed || trimmed.length > text.length * 2) return text;
+    return trimmed;
   } catch {
     return text;
   }
@@ -286,6 +291,7 @@ export default function AiPage() {
   const urgentCallCountRef = useRef(0);
   const lastAnalyzedCountRef = useRef(0);
   const lastUrgentEntryIdRef = useRef('');
+  const lastTranscriptTimeRef = useRef(0); // 중복 방지: 마지막 저장 시각
   const meetingContextRef = useRef('');
   const teamSummaryRef = useRef('');
   const chatHistoryRef = useRef<ApiMessage[]>([]);
@@ -417,8 +423,12 @@ export default function AiPage() {
       showToast('세션 없음 — 방 코드를 확인하세요', 'error');
       return;
     }
-    const now = new Date();
-    const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    // 1.5초 이내 중복 발화 스킵 (auto-restart로 인한 재인식 방지)
+    const now = Date.now();
+    if (now - lastTranscriptTimeRef.current < 1500) return;
+    lastTranscriptTimeRef.current = now;
+    const nowDate = new Date(now);
+    const time = `${String(nowDate.getHours()).padStart(2, '0')}:${String(nowDate.getMinutes()).padStart(2, '0')}`;
     const speaker = currentSpeakerRef.current || undefined;
     try {
       // 원본 텍스트 즉시 저장 → 화면에 바로 표시
@@ -426,7 +436,7 @@ export default function AiPage() {
         text,
         time,
         speaker,
-        createdAt: now.getTime(),
+        createdAt: now,
       });
       // 백그라운드에서 Claude 교정 후 업데이트
       const code = sessionCodeRef.current;
