@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useAppStore } from '@/store/useAppStore';
 import { ResultHero } from '@/components/result/ResultHero';
 import { ResultGrid } from '@/components/result/ResultGrid';
-import { generateShareCode } from '@/lib/shareCode';
+import { generateShareCode, generateInviteCode } from '@/lib/shareCode';
 
 export default function ResultPage() {
   const router = useRouter();
@@ -16,7 +16,8 @@ export default function ResultPage() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [name, setName] = useState('');
-  const [shareCode, setShareCode] = useState('');
+  const [shareCode, setShareCode] = useState('');   // 짧은 코드: "483921F"
+  const [inviteCode, setInviteCode] = useState(''); // base64 (URL용)
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -27,6 +28,7 @@ export default function ResultPage() {
     if (modalOpen) {
       setName('');
       setShareCode('');
+      setInviteCode('');
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [modalOpen]);
@@ -37,14 +39,22 @@ export default function ResultPage() {
     if (!name.trim()) return;
     const trimmed = name.trim();
     addTeamMember({ id: Date.now().toString(), name: trimmed, code: result.typeKey });
-    setShareCode(generateShareCode(trimmed, result.typeKey));
+    setShareCode(generateShareCode(result.typeKey));
+    setInviteCode(generateInviteCode(trimmed, result.typeKey));
   };
 
-  const inviteUrl = shareCode
-    ? `${window.location.origin}/team?code=${shareCode}`
-    : '';
+  const inviteUrl = inviteCode ? `${window.location.origin}/team?code=${inviteCode}` : '';
 
-  const handleCopyCode = async () => {
+  const handleCopyShortCode = async () => {
+    try {
+      await navigator.clipboard.writeText(shareCode);
+      showToast('코드 복사됨!', 'success');
+    } catch {
+      showToast('복사 실패', 'error');
+    }
+  };
+
+  const handleCopyLink = async () => {
     try {
       await navigator.clipboard.writeText(inviteUrl);
       showToast('초대 링크 복사됨!', 'success');
@@ -61,11 +71,9 @@ export default function ResultPage() {
       <ResultGrid result={result} />
 
       <div className="flex flex-col gap-3 mt-8">
-        {/* 1단계: 메인 액션 */}
         <button className="btn-primary w-full py-4 text-sm" onClick={() => setModalOpen(true)}>
-          팀에 추가하고 초대 링크 받기 →
+          팀에 추가하고 초대 코드 받기 →
         </button>
-        {/* 2단계, 3단계: 보조 */}
         <div className="flex gap-3">
           <Link href="/ai" className="btn-secondary flex-1 text-sm text-center py-2.5">
             AI 중재 시작하기
@@ -105,16 +113,38 @@ export default function ResultPage() {
               </>
             ) : (
               <>
-                <div className="text-center mb-4">
+                <div className="text-center mb-5">
                   <div className="text-2xl mb-2">✅</div>
                   <h2 className="text-base font-semibold text-slate-200">팀에 추가됐어요!</h2>
-                  <p className="text-xs text-slate-500 mt-1">링크를 팀원들에게 공유하세요</p>
                 </div>
-                <div className="bg-surface2 rounded-xl px-4 py-3 mb-3 border border-border">
-                  <p className="text-[10px] text-slate-500 mb-1">초대 링크</p>
-                  <p className="text-xs font-mono text-accent break-all">{inviteUrl}</p>
+
+                {/* 짧은 코드 */}
+                <div className="mb-3">
+                  <p className="text-[10px] text-slate-500 mb-1.5">내 코드 — 같은 자리라면 불러주세요</p>
+                  <div className="flex items-center gap-2 bg-surface2 rounded-xl px-4 py-3 border border-border">
+                    <span className="font-mono text-xl font-bold text-accent tracking-widest flex-1">
+                      {shareCode}
+                    </span>
+                    <button
+                      onClick={handleCopyShortCode}
+                      className="text-xs text-slate-400 hover:text-accent transition-colors shrink-0"
+                    >
+                      복사
+                    </button>
+                  </div>
                 </div>
-                <button className="btn-primary w-full text-sm mb-2" onClick={handleCopyCode}>링크 복사</button>
+
+                {/* 초대 링크 */}
+                <div className="mb-4">
+                  <p className="text-[10px] text-slate-500 mb-1.5">초대 링크 — 카카오톡 등으로 보내세요</p>
+                  <div className="bg-surface2 rounded-xl px-4 py-3 border border-border">
+                    <p className="text-[10px] font-mono text-slate-500 break-all leading-relaxed">{inviteUrl}</p>
+                  </div>
+                </div>
+
+                <button className="btn-primary w-full text-sm mb-2" onClick={handleCopyLink}>
+                  초대 링크 복사
+                </button>
                 <button className="btn-secondary w-full text-sm" onClick={() => setModalOpen(false)}>닫기</button>
               </>
             )}

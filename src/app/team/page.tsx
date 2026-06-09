@@ -46,6 +46,8 @@ export default function TeamPage() {
   const [code, setCode] = useState<CodeType>('D');
   const [joinCode, setJoinCode] = useState('');
   const [joinError, setJoinError] = useState('');
+  const [pendingType, setPendingType] = useState(''); // 짧은 코드 입력 시 typeKey 임시 저장
+  const [pendingName, setPendingName] = useState('');
 
   const handleAdd = () => {
     if (!name.trim()) {
@@ -64,8 +66,24 @@ export default function TeamPage() {
       setJoinError('올바르지 않은 코드예요');
       return;
     }
-    addTeamMember({ id: Date.now().toString(), name: decoded.name, code: decoded.typeKey });
-    showToast(`${decoded.name} 추가됨!`, 'success');
+    if (decoded.name) {
+      // base64 URL 코드 — 이름 포함
+      addTeamMember({ id: Date.now().toString(), name: decoded.name, code: decoded.typeKey });
+      showToast(`${decoded.name} 추가됨!`, 'success');
+      setJoinCode('');
+    } else {
+      // 짧은 코드 — 이름 없음, 별도 입력 필요
+      setPendingType(decoded.typeKey);
+      setPendingName('');
+    }
+  };
+
+  const handlePendingAdd = () => {
+    if (!pendingName.trim()) return;
+    addTeamMember({ id: Date.now().toString(), name: pendingName.trim(), code: pendingType });
+    showToast(`${pendingName.trim()} 추가됨!`, 'success');
+    setPendingType('');
+    setPendingName('');
     setJoinCode('');
   };
 
@@ -84,18 +102,54 @@ export default function TeamPage() {
           {/* 코드로 추가 */}
           <div className="card space-y-3">
             <h3 className="font-semibold text-slate-200">코드로 추가</h3>
-            <p className="text-xs text-slate-500">팀원이 성향테스트 후 공유한 코드를 입력하세요</p>
-            <div className="flex gap-2">
-              <input
-                className="input-base flex-1 text-sm font-mono"
-                placeholder="공유 코드 붙여넣기"
-                value={joinCode}
-                onChange={(e) => { setJoinCode(e.target.value); setJoinError(''); }}
-                onKeyDown={(e) => e.key === 'Enter' && handleCodeAdd()}
-              />
-              <button className="btn-primary px-4 text-sm shrink-0" onClick={handleCodeAdd}>추가</button>
-            </div>
-            {joinError && <p className="text-xs text-red-400">{joinError}</p>}
+            <p className="text-xs text-slate-500">팀원이 공유한 코드를 입력하세요</p>
+
+            {!pendingType ? (
+              <>
+                <div className="flex gap-2">
+                  <input
+                    className="input-base flex-1 text-sm font-mono tracking-widest"
+                    placeholder="예) 483921F"
+                    value={joinCode}
+                    onChange={(e) => { setJoinCode(e.target.value.toUpperCase()); setJoinError(''); }}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCodeAdd()}
+                    maxLength={40}
+                  />
+                  <button className="btn-primary px-4 text-sm shrink-0" onClick={handleCodeAdd}>확인</button>
+                </div>
+                {joinError && <p className="text-xs text-red-400">{joinError}</p>}
+              </>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 bg-accent/10 rounded-lg px-3 py-2 border border-accent/30">
+                  <span className="font-mono font-bold text-accent tracking-widest">{joinCode}</span>
+                  <span className="text-xs text-slate-400">→ {pendingType} 타입 확인됨</span>
+                </div>
+                <input
+                  className="input-base w-full text-sm"
+                  placeholder="이 팀원의 이름을 입력하세요"
+                  value={pendingName}
+                  onChange={(e) => setPendingName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handlePendingAdd()}
+                  autoFocus
+                />
+                <div className="flex gap-2">
+                  <button
+                    className="btn-secondary flex-1 text-sm"
+                    onClick={() => { setPendingType(''); setPendingName(''); }}
+                  >
+                    취소
+                  </button>
+                  <button
+                    className="btn-primary flex-1 text-sm"
+                    onClick={handlePendingAdd}
+                    disabled={!pendingName.trim()}
+                  >
+                    추가
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="card space-y-3">
