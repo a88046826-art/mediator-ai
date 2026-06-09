@@ -412,6 +412,51 @@ export default function AiPage() {
     },
   });
 
+  const handleChatSend = useCallback(async () => {
+    const text = chatInput.trim();
+    if (!text || isChatting || !sessionCodeRef.current) return;
+    if (containsProfanity(text)) { showToast('비속어가 포함된 메시지는 전송할 수 없어요.', 'error'); return; }
+
+    setChatInput('');
+    setIsChatting(true);
+    setActiveTab('ai');
+
+    const userMsg: ApiMessage = { role: 'user', content: text };
+    await fbAddAiMessage(sessionCodeRef.current, {
+      content: text,
+      isAlert: false,
+      role: 'user',
+      createdAt: Date.now(),
+    });
+
+    const transcriptText = (sessionState?.transcript ?? [])
+      .map((e) => `[${e.time}] ${e.speaker ? `${e.speaker}: ` : ''}${e.text}`)
+      .join('\n');
+
+    const history: ApiMessage[] = [...chatHistoryRef.current, userMsg];
+    try {
+      const result = await callApi(
+        buildChatSystemPrompt(teamSummaryRef.current, meetingContextRef.current, transcriptText),
+        text,
+        512,
+        history,
+      );
+      chatHistoryRef.current = [...history, { role: 'ai', content: result }];
+      await fbAddAiMessage(sessionCodeRef.current, {
+        content: result,
+        isAlert: false,
+        role: 'ai',
+        createdAt: Date.now() + 1,
+      });
+    } catch {
+      showToast('AI 응답 오류가 발생했어요.', 'error');
+      chatHistoryRef.current = history;
+    } finally {
+      setIsChatting(false);
+      setTimeout(() => chatInputRef.current?.focus(), 50);
+    }
+  }, [chatInput, isChatting, showToast, sessionState?.transcript]);
+
   // ── CREATE OR JOIN ──────────────────────────────────────────────────────────
   if (phase === 'createOrJoin') {
     const handleCreate = async () => {
@@ -966,51 +1011,6 @@ export default function AiPage() {
     await endMeeting(sessionCodeRef.current);
     // Phase transition happens via useEffect watching sessionState.status
   };
-
-  const handleChatSend = useCallback(async () => {
-    const text = chatInput.trim();
-    if (!text || isChatting || !sessionCodeRef.current) return;
-    if (containsProfanity(text)) { showToast('비속어가 포함된 메시지는 전송할 수 없어요.', 'error'); return; }
-
-    setChatInput('');
-    setIsChatting(true);
-    setActiveTab('ai');
-
-    const userMsg: ApiMessage = { role: 'user', content: text };
-    await fbAddAiMessage(sessionCodeRef.current, {
-      content: text,
-      isAlert: false,
-      role: 'user',
-      createdAt: Date.now(),
-    });
-
-    const transcriptText = (sessionState?.transcript ?? [])
-      .map((e) => `[${e.time}] ${e.speaker ? `${e.speaker}: ` : ''}${e.text}`)
-      .join('\n');
-
-    const history: ApiMessage[] = [...chatHistoryRef.current, userMsg];
-    try {
-      const result = await callApi(
-        buildChatSystemPrompt(teamSummaryRef.current, meetingContextRef.current, transcriptText),
-        text,
-        512,
-        history,
-      );
-      chatHistoryRef.current = [...history, { role: 'ai', content: result }];
-      await fbAddAiMessage(sessionCodeRef.current, {
-        content: result,
-        isAlert: false,
-        role: 'ai',
-        createdAt: Date.now() + 1,
-      });
-    } catch {
-      showToast('AI 응답 오류가 발생했어요.', 'error');
-      chatHistoryRef.current = history;
-    } finally {
-      setIsChatting(false);
-      setTimeout(() => chatInputRef.current?.focus(), 50);
-    }
-  }, [chatInput, isChatting, showToast, sessionState?.transcript]);
 
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 4rem)' }}>
