@@ -8,7 +8,7 @@ const ALLOWED_ORIGINS = [
 ];
 
 const MAX_TOKENS_CAP = 3000;
-const MAX_PAYLOAD_BYTES = 30_000;
+const MAX_PAYLOAD_BYTES = 100_000;
 
 export async function POST(req: NextRequest) {
   // Origin 검사 — 외부 호출 차단

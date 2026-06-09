@@ -74,8 +74,8 @@ describe('POST /api/chat', () => {
     expect(data.error).toContain('ANTHROPIC_API_KEY');
   });
 
-  it('30KB 초과 페이로드 → 413', async () => {
-    const bigContent = 'a'.repeat(31000);
+  it('100KB 초과 페이로드 → 413', async () => {
+    const bigContent = 'a'.repeat(101000);
     const req = makeRequest({
       system: '',
       messages: [{ role: 'user', content: bigContent }],
