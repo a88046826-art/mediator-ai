@@ -1261,7 +1261,7 @@ export default function AiPage() {
       <MeetingControls
         isRecording={isListening}
         isAnalyzing={isAnalyzing}
-        onToggleMic={toggle}
+        onToggleMic={() => { setMicBlocked(false); toggle(); }}
         onManualAsk={handleManualAsk}
         onCopy={handleCopy}
         onExport={handleExport}

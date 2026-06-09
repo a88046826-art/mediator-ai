@@ -132,6 +132,12 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
         e.error === 'not-allowed' ? '마이크 권한을 허용해 주세요.' :
         e.error === 'network'     ? '네트워크 오류가 발생했습니다.' :
         e.error;
+      // not-allowed: 자동 재시작 루프 즉시 중단 (허용 전까지 계속 실패하므로)
+      if (e.error === 'not-allowed') {
+        userStoppedRef.current = true;
+        isListeningRef.current = false;
+        setIsListening(false);
+      }
       onErrorRef.current?.(msg);
     };
 
