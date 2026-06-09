@@ -22,7 +22,7 @@ import {
 
 type Phase = 'createOrJoin' | 'lobby' | 'meeting' | 'summary';
 type ActiveTab = 'transcript' | 'ai';
-type SummaryView = null | 'analysis' | 'next-topic';
+type SummaryView = null | 'analysis' | 'next-topic' | 'action-items';
 type ApiMessage = { role: 'user' | 'ai'; content: string };
 
 const PROFANITY = [
@@ -187,6 +187,36 @@ ${transcriptText || '(없음)'}
 한국어로 작성하세요.`;
 }
 
+function buildActionItemsPrompt(teamSummary: string, context: string, transcriptText: string): string {
+  return `당신은 회의 결과를 정리하는 전문가입니다.
+
+팀 구성: ${teamSummary || '없음'}
+회의 주제: ${context || '없음'}
+
+=== 대화 기록 ===
+${transcriptText || '(없음)'}
+
+아래 형식으로 간결하게 정리하세요. 없는 항목은 "없음"으로 표시.
+
+## 📋 결정 사항
+각 결정을 "· [내용]" 형식으로 나열
+
+---
+
+## ✅ 액션 아이템
+각 항목을 "· [담당자] — [할 일] ([기한])" 형식으로 나열
+담당자나 기한이 불명확하면 "미정"으로 표시
+
+---
+
+## ⚠️ 미결 사항
+다음 회의에서 다뤄야 할 것들을 "· [내용]" 형식으로 나열
+
+---
+
+한국어로 작성하세요.`;
+}
+
 function buildChatSystemPrompt(teamSummary: string, context: string, transcriptText: string): string {
   return `당신은 팀 회의 중재 보조자입니다. 회의 참가자가 채팅으로 질문하면 답합니다.
 
@@ -201,6 +231,19 @@ ${transcriptText || '(아직 없음)'}
 2. 2-3문장으로만 답하세요.
 3. 욕설·비속어가 포함된 메시지에는 "적절한 언어로 다시 질문해 주세요."라고만 답하세요.
 한국어.`;
+}
+
+async function correctTranscript(text: string): Promise<string> {
+  try {
+    const result = await callApi(
+      '한국어 회의 발화를 자연스럽게 교정하세요. 원문 의미를 유지하고 교정된 텍스트만 반환하세요. 추가 설명 없이.',
+      text,
+      150,
+    );
+    return result.trim() || text;
+  } catch {
+    return text;
+  }
 }
 
 async function callApi(
@@ -394,8 +437,9 @@ export default function AiPage() {
     const now = new Date();
     const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     const speaker = currentSpeakerRef.current || undefined;
+    const corrected = await correctTranscript(text);
     await fbAddTranscript(sessionCodeRef.current, {
-      text,
+      text: corrected,
       time,
       speaker,
       createdAt: now.getTime(),
@@ -676,6 +720,14 @@ export default function AiPage() {
 
     const SUMMARY_ACTIONS = [
       {
+        key: 'action-items' as const,
+        emoji: '📋',
+        title: '액션 아이템',
+        desc: '결정 사항 · 담당자별 할 일 · 미결 사항',
+        color: 'from-green-500/20 to-green-500/5 border-green-500/30 hover:border-green-400/60',
+        textColor: 'text-green-300',
+      },
+      {
         key: 'analysis' as const,
         emoji: '📊',
         title: '회의결과 분석',
@@ -708,7 +760,8 @@ export default function AiPage() {
         .join('\n\n');
       try {
         let prompt = '';
-        if (view === 'analysis') prompt = buildAnalysisPrompt(teamSummaryForSummary, topicForSummary, transcriptText, aiInterventions);
+        if (view === 'action-items') prompt = buildActionItemsPrompt(teamSummaryForSummary, topicForSummary, transcriptText);
+        else if (view === 'analysis') prompt = buildAnalysisPrompt(teamSummaryForSummary, topicForSummary, transcriptText, aiInterventions);
         else prompt = buildNextTopicsPrompt(teamSummaryForSummary, topicForSummary, transcriptText);
         const result = await callApi(prompt, '분석해주세요.', 3000);
         setSummaryContent(result);
