@@ -11,26 +11,26 @@ export function HeroSection() {
       <div className="relative z-10 max-w-2xl">
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-accent/10 border border-accent/30 text-accent text-xs font-medium mb-6">
           <span className="w-1.5 h-1.5 bg-accent rounded-full animate-pulse2" />
-          AI 팀 중재자 &amp; 성향 진단
+          AI 실시간 회의 중재자
         </div>
 
         <h1 className="text-4xl sm:text-5xl font-bold leading-tight mb-5">
-          팀이 왜 자꾸
+          회의가 산으로 가기 전에
           <br />
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent to-accent2">
-            겉도는지 알고 싶다면
+            AI가 먼저 잡아줍니다
           </span>
         </h1>
 
         <p className="text-slate-400 text-lg mb-8 leading-relaxed">
-          D·O·C·E 성향 진단으로 팀원을 이해하고,
+          팀원들이 각자 기기에서 접속하고,
           <br />
-          AI 중재자가 회의 갈등을 실시간으로 해결합니다.
+          AI가 대화를 실시간으로 분석해 갈등을 중재합니다.
         </p>
 
         <div className="flex justify-center">
-          <Link href="/test/code" className="btn-primary text-base px-10 py-4">
-            내 성향 진단하기 →
+          <Link href="/ai" className="btn-primary text-base px-10 py-4">
+            AI 회의 시작하기 →
           </Link>
         </div>
       </div>

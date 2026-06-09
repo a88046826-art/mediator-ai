@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { CodeType, TeamMember, TestResult, Message, MeetingRecord } from '@/types';
+import type { TeamMember, Message, MeetingRecord } from '@/types';
 
 interface Toast {
   id: string;
@@ -11,15 +11,11 @@ interface Toast {
 }
 
 interface AppState {
-  testResult: TestResult | null;
   teamMembers: TeamMember[];
   messages: Message[];
   meetingContext: string;
   meetingHistory: MeetingRecord[];
   toast: Toast | null;
-
-  setTestResult: (result: TestResult) => void;
-  clearTestResult: () => void;
 
   addTeamMember: (member: TeamMember) => void;
   removeTeamMember: (id: string) => void;
@@ -40,15 +36,11 @@ interface AppState {
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
-      testResult: null,
       teamMembers: [],
       messages: [],
       meetingContext: '',
       meetingHistory: [],
       toast: null,
-
-      setTestResult: (result) => set({ testResult: result }),
-      clearTestResult: () => set({ testResult: null }),
 
       addTeamMember: (member) =>
         set((s) => ({
@@ -72,7 +64,6 @@ export const useAppStore = create<AppState>()(
             id: Date.now().toString(),
             date: new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }),
           };
-          // 최대 20개 유지
           const updated = [newRecord, ...s.meetingHistory].slice(0, 20);
           return { meetingHistory: updated };
         }),
@@ -89,7 +80,6 @@ export const useAppStore = create<AppState>()(
     {
       name: 'mediator-ai-store',
       partialize: (s) => ({
-        testResult: s.testResult,
         teamMembers: s.teamMembers,
         meetingHistory: s.meetingHistory,
       }),
