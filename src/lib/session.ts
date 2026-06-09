@@ -1,6 +1,7 @@
 import { getDb } from './firebase';
 import { ref, set, push, update, get } from 'firebase/database';
 
+
 export interface SessionMember {
   name: string;
   ready: boolean;
@@ -99,6 +100,14 @@ export async function addTranscript(
   const newRef = push(ref(db, `sessions/${code}/transcript`));
   await set(newRef, { ...entry, id: newRef.key! });
   return newRef.key!;
+}
+
+export async function updateTranscriptText(
+  code: string,
+  entryId: string,
+  text: string,
+): Promise<void> {
+  await update(ref(getDb(), `sessions/${code}/transcript/${entryId}`), { text });
 }
 
 export async function addSetupEntry(code: string, role: 'user' | 'ai', text: string): Promise<void> {

@@ -15,6 +15,7 @@ import {
   createSession, joinSession, setTopic,
   startMeeting, endMeeting,
   addTranscript as fbAddTranscript,
+  updateTranscriptText as fbUpdateTranscriptText,
   addAiMessage as fbAddAiMessage,
   addSetupEntry,
   type SessionTranscriptEntry, type SessionAiMessage,
@@ -416,12 +417,19 @@ export default function AiPage() {
     const now = new Date();
     const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     const speaker = currentSpeakerRef.current || undefined;
-    const corrected = await correctTranscript(text);
-    await fbAddTranscript(sessionCodeRef.current, {
-      text: corrected,
+    // 원본 텍스트 즉시 저장 → 화면에 바로 표시
+    const entryId = await fbAddTranscript(sessionCodeRef.current, {
+      text,
       time,
       speaker,
       createdAt: now.getTime(),
+    });
+    // 백그라운드에서 Claude 교정 후 업데이트 (지연 없이 UX 유지)
+    const code = sessionCodeRef.current;
+    correctTranscript(text).then((corrected) => {
+      if (corrected !== text && code) {
+        fbUpdateTranscriptText(code, entryId, corrected);
+      }
     });
   }, []);
 
