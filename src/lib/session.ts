@@ -98,7 +98,10 @@ export async function addTranscript(
 ): Promise<string> {
   const db = getDb();
   const newRef = push(ref(db, `sessions/${code}/transcript`));
-  await set(newRef, { ...entry, id: newRef.key! });
+  const data = Object.fromEntries(
+    Object.entries({ ...entry, id: newRef.key! }).filter(([, v]) => v !== undefined),
+  );
+  await set(newRef, data);
   return newRef.key!;
 }
 
