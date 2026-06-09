@@ -41,6 +41,26 @@ function containsProfanity(text: string): boolean {
   return PROFANITY.some((w) => normalized.includes(w.toLowerCase()));
 }
 
+function playDing() {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const AudioCtx = window.AudioContext ?? (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx() as AudioContext;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.25, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.5);
+    osc.onended = () => ctx.close();
+  } catch { /* ignore */ }
+}
+
 function buildSystemPrompt(context: string, teamSummary: string): string {
   return `당신은 스타트업 팀 전문 AI 중재자입니다.
 
@@ -275,6 +295,8 @@ export default function AiPage() {
   const [micBlocked, setMicBlocked] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [isChatting, setIsChatting] = useState(false);
+  const [unreadAiCount, setUnreadAiCount] = useState(0);
+  const [flashAiPanel, setFlashAiPanel] = useState(false);
   // snapshot saved when meeting ends (for summary)
   const summaryTranscriptRef = useRef<SessionTranscriptEntry[]>([]);
   const summaryAiMessagesRef = useRef<SessionAiMessage[]>([]);
@@ -296,6 +318,9 @@ export default function AiPage() {
   const teamSummaryRef = useRef('');
   const chatHistoryRef = useRef<ApiMessage[]>([]);
   const chatInputRef = useRef<HTMLInputElement>(null);
+  const prevAiLengthRef = useRef(0);
+  const activeTabRef = useRef<ActiveTab>('transcript');
+  activeTabRef.current = activeTab;
 
   const MAX_SESSION_CALLS = 30;
   const MAX_URGENT_CALLS = 50;
@@ -320,6 +345,8 @@ export default function AiPage() {
     if (sessionState.status === 'meeting' && phase === 'lobby') {
       setPhase('meeting');
       setActiveTab('transcript');
+      setUnreadAiCount(0);
+      prevAiLengthRef.current = 0;
       lastAnalyzedCountRef.current = 0;
       sessionCallCountRef.current = 0;
       urgentCallCountRef.current = 0;
@@ -378,7 +405,6 @@ export default function AiPage() {
         role: 'ai',
         createdAt: Date.now(),
       });
-      setActiveTab('ai');
       analysisFailCountRef.current = 0;
       setAiError(false);
     } catch {
@@ -408,7 +434,6 @@ export default function AiPage() {
         role: 'ai',
         createdAt: Date.now(),
       });
-      setActiveTab('ai');
       setAiError(false);
       analysisFailCountRef.current = 0;
     } catch {
@@ -463,6 +488,25 @@ export default function AiPage() {
   useEffect(() => {
     if (!isSupported) showToast('이 브라우저는 음성 인식을 지원하지 않아요. Chrome을 사용해 주세요.', 'error');
   }, [isSupported]);
+
+  // AI 신호: 새 AI 메시지 → 딩 + 진동 + 뱃지
+  useEffect(() => {
+    if (phase !== 'meeting') { prevAiLengthRef.current = 0; return; }
+    const aiOnlyCount = (sessionState?.aiMessages ?? []).filter((m) => m.role === 'ai').length;
+    if (prevAiLengthRef.current > 0 && aiOnlyCount > prevAiLengthRef.current) {
+      const newMsgs = aiOnlyCount - prevAiLengthRef.current;
+      playDing();
+      try { navigator.vibrate?.(200); } catch { /* ignore */ }
+      setFlashAiPanel(true);
+      setTimeout(() => setFlashAiPanel(false), 1200);
+      const isDesktop = typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches;
+      if (!isDesktop && activeTabRef.current !== 'ai') {
+        setUnreadAiCount((prev) => prev + newMsgs);
+      }
+    }
+    prevAiLengthRef.current = aiOnlyCount;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionState?.aiMessages?.length, phase]);
 
   const handleChatSend = useCallback(async () => {
     const text = chatInput.trim();
@@ -845,6 +889,8 @@ export default function AiPage() {
       lastAnalyzedCountRef.current = 0;
       sessionCallCountRef.current = 0;
       urgentCallCountRef.current = 0;
+      setUnreadAiCount(0);
+      prevAiLengthRef.current = 0;
       setPhase('createOrJoin');
     };
 
@@ -1044,6 +1090,7 @@ export default function AiPage() {
 
   const handleEnd = async () => {
     stop();
+    setUnreadAiCount(0);
     if (!sessionCodeRef.current) return;
     // Save to local Zustand history
     if (firebaseTranscript.length > 0) {
@@ -1150,16 +1197,30 @@ export default function AiPage() {
 
       {/* mobile tab bar */}
       <div className="sm:hidden shrink-0 flex border-b border-border bg-surface">
-        {(['transcript', 'ai'] as ActiveTab[]).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-2 text-xs font-medium transition-colors relative ${activeTab === tab ? 'text-accent' : 'text-slate-500'}`}
-          >
-            {tab === 'transcript' ? '대화 기록' : `AI 중재${displayMessages.length > 1 ? ` (${displayMessages.length - 1})` : ''}`}
-            {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />}
-          </button>
-        ))}
+        <button
+          onClick={() => setActiveTab('transcript')}
+          className={`flex-1 py-2 text-xs font-medium transition-colors relative ${activeTab === 'transcript' ? 'text-accent' : 'text-slate-500'}`}
+        >
+          대화 기록
+          {activeTab === 'transcript' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />}
+        </button>
+        <button
+          onClick={() => { setActiveTab('ai'); setUnreadAiCount(0); }}
+          className={`flex-1 py-2 text-xs font-medium transition-colors relative ${
+            unreadAiCount > 0 ? 'text-violet-400' : activeTab === 'ai' ? 'text-accent' : 'text-slate-500'
+          }`}
+        >
+          <span className="flex items-center justify-center gap-1.5">
+            AI 중재
+            {unreadAiCount > 0 && (
+              <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-violet-500 text-white text-[9px] font-bold shrink-0 animate-bounce">
+                {unreadAiCount > 9 ? '9+' : unreadAiCount}
+              </span>
+            )}
+          </span>
+          {activeTab === 'ai' && unreadAiCount === 0 && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />}
+          {unreadAiCount > 0 && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-violet-500 animate-pulse" />}
+        </button>
       </div>
 
       {/* two-panel */}
@@ -1172,8 +1233,10 @@ export default function AiPage() {
         </div>
 
         <div className={`flex-col overflow-hidden sm:flex sm:flex-1 ${activeTab === 'ai' ? 'flex flex-1' : 'hidden'}`}>
-          <div className="shrink-0 px-4 pt-3 pb-2 border-b border-border/40">
-            <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">AI 중재</p>
+          <div className={`shrink-0 px-4 pt-3 pb-2 border-b border-border/40 transition-colors duration-500 ${flashAiPanel ? 'bg-violet-500/8' : ''}`}>
+            <p className={`text-[10px] font-mono uppercase tracking-widest transition-colors duration-300 ${flashAiPanel ? 'text-violet-400' : 'text-slate-500'}`}>
+              AI 중재{flashAiPanel ? ' ●' : ''}
+            </p>
           </div>
           <ChatWindow messages={displayMessages} isLoading={isChatting} />
           <div className="shrink-0 border-t border-border/40 px-3 py-2.5 flex gap-2 items-center bg-surface">
