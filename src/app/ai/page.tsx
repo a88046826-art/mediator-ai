@@ -236,7 +236,7 @@ ${transcriptText || '(아직 없음)'}
 async function correctTranscript(text: string): Promise<string> {
   try {
     const result = await callApi(
-      '한국어 회의 발화를 자연스럽게 교정하세요. 원문 의미를 유지하고 교정된 텍스트만 반환하세요. 추가 설명 없이.',
+      '한국어 회의 발화를 교정하세요. "음", "어", "그러니까" 같은 필러는 제거하고 핵심 내용만 남기세요. 원문 의미를 유지하고 교정된 텍스트만 반환하세요. 추가 설명 없이.',
       text,
       150,
     );
