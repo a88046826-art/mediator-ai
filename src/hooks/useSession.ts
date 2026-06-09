@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ref, onValue, off } from 'firebase/database';
 import { getDb, isFirebaseConfigured } from '@/lib/firebase';
-import type { SessionData, SessionTranscriptEntry, SessionAiMessage } from '@/lib/session';
+import type { SessionData, SessionTranscriptEntry, SessionAiMessage, SetupChatEntry } from '@/lib/session';
 
 export function useSession(sessionCode: string | null): SessionData | null {
   const [state, setState] = useState<SessionData | null>(null);
@@ -39,6 +39,11 @@ export function useSession(sessionCode: string | null): SessionData | null {
               .sort((a, b) => a.createdAt - b.createdAt)
           : [];
 
+        const setupChat: SetupChatEntry[] = data.setupChat
+          ? (Object.values(data.setupChat as Record<string, SetupChatEntry>))
+              .sort((a, b) => a.createdAt - b.createdAt)
+          : [];
+
         setState({
           status: data.status as SessionData['status'],
           host: data.host as string,
@@ -46,6 +51,7 @@ export function useSession(sessionCode: string | null): SessionData | null {
           members: (data.members as SessionData['members']) || {},
           transcript,
           aiMessages,
+          setupChat,
         });
       },
       () => { /* permission/network error — stay in current state */ },

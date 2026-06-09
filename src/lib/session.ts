@@ -22,6 +22,13 @@ export interface SessionAiMessage {
   createdAt: number;
 }
 
+export interface SetupChatEntry {
+  id: string;
+  role: 'user' | 'ai';
+  text: string;
+  createdAt: number;
+}
+
 export interface SessionData {
   status: 'lobby' | 'meeting' | 'ended';
   host: string;
@@ -29,6 +36,7 @@ export interface SessionData {
   members: Record<string, SessionMember>;
   transcript: SessionTranscriptEntry[];
   aiMessages: SessionAiMessage[];
+  setupChat: SetupChatEntry[];
 }
 
 function generateRoomCode(): string {
@@ -91,6 +99,12 @@ export async function addTranscript(
   const newRef = push(ref(db, `sessions/${code}/transcript`));
   await set(newRef, { ...entry, id: newRef.key! });
   return newRef.key!;
+}
+
+export async function addSetupEntry(code: string, role: 'user' | 'ai', text: string): Promise<void> {
+  const db = getDb();
+  const newRef = push(ref(db, `sessions/${code}/setupChat`));
+  await set(newRef, { id: newRef.key!, role, text, createdAt: Date.now() });
 }
 
 export async function addAiMessage(

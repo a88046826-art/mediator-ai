@@ -7,6 +7,7 @@ import { useVoiceRecognition } from '@/hooks/useVoiceRecognition';
 interface Props {
   members: TeamMember[];
   onStart: (context: string) => void;
+  onMessage?: (role: 'user' | 'ai', text: string) => void;
 }
 
 type SetupMessage = { role: 'user' | 'ai'; text: string };
@@ -65,7 +66,7 @@ async function buildFinalContext(messages: SetupMessage[]): Promise<string> {
   return data.content as string;
 }
 
-export function MeetingSetup({ members, onStart }: Props) {
+export function MeetingSetup({ members, onStart, onMessage }: Props) {
   const [messages, setMessages] = useState<SetupMessage[]>([]);
   const [input, setInput] = useState('');
   const [interimText, setInterimText] = useState('');
@@ -99,11 +100,13 @@ export function MeetingSetup({ members, onStart }: Props) {
     setInput('');
     setInterimText('');
     setIsLoading(true);
+    onMessage?.('user', text);
 
     try {
       const reply = await askAi(next);
       const aiMsg: SetupMessage = { role: 'ai', text: reply };
       setMessages([...next, aiMsg]);
+      onMessage?.('ai', reply);
       if (reply.startsWith('✅')) setIsReady(true);
       setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
     } catch {

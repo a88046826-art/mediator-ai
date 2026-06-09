@@ -12,10 +12,11 @@ import { useSession } from '@/hooks/useSession';
 import { getDeviceId } from '@/lib/deviceId';
 import { isFirebaseConfigured } from '@/lib/firebase';
 import {
-  createSession, joinSession, setMemberReady, setTopic,
+  createSession, joinSession, setTopic,
   startMeeting, endMeeting,
   addTranscript as fbAddTranscript,
   addAiMessage as fbAddAiMessage,
+  addSetupEntry,
   type SessionTranscriptEntry, type SessionAiMessage,
 } from '@/lib/session';
 
@@ -246,8 +247,6 @@ export default function AiPage() {
   const [micBlocked, setMicBlocked] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [isChatting, setIsChatting] = useState(false);
-  const [isReadyLocal, setIsReadyLocal] = useState(false);
-
   // snapshot saved when meeting ends (for summary)
   const summaryTranscriptRef = useRef<SessionTranscriptEntry[]>([]);
   const summaryAiMessagesRef = useRef<SessionAiMessage[]>([]);
@@ -570,8 +569,8 @@ export default function AiPage() {
   // ── LOBBY ──────────────────────────────────────────────────────────────────
   if (phase === 'lobby') {
     const members = sessionState ? Object.entries(sessionState.members) : [];
-    const memberList = members.map(([dId, m]) => ({ id: dId, name: m.name, ready: m.ready }));
-    const myReady = sessionState?.members[deviceIdRef.current]?.ready ?? false;
+    const memberList = members.map(([dId, m]) => ({ id: dId, name: m.name }));
+    const setupChat = sessionState?.setupChat ?? [];
 
     const handleHostStart = async (context: string) => {
       if (!sessionCodeRef.current) return;
@@ -588,13 +587,6 @@ export default function AiPage() {
       } catch {
         showToast('회의 시작 실패. 다시 시도해 주세요.', 'error');
       }
-    };
-
-    const handleToggleReady = async () => {
-      if (!sessionCodeRef.current) return;
-      const next = !myReady;
-      setIsReadyLocal(next);
-      await setMemberReady(sessionCodeRef.current, deviceIdRef.current, next);
     };
 
     return (
@@ -626,9 +618,6 @@ export default function AiPage() {
                   {m.id === sessionState.host && (
                     <span className="text-[10px] text-accent/60 font-mono">호스트</span>
                   )}
-                  {m.ready && m.id !== sessionState.host && (
-                    <span className="text-[10px] text-green-400">준비 완료</span>
-                  )}
                 </div>
               ))}
             </div>
@@ -641,24 +630,36 @@ export default function AiPage() {
           <div>
             <p className="text-xs text-slate-500 mb-3">회의 정보를 입력하고 시작하세요</p>
             <MeetingSetup
-              members={memberList.map((m) => ({ id: m.id, name: m.name }))}
+              members={memberList}
               onStart={handleHostStart}
+              onMessage={(role, text) => {
+                if (sessionCodeRef.current) addSetupEntry(sessionCodeRef.current, role, text);
+              }}
             />
           </div>
         ) : (
-          <div className="card text-center space-y-4">
-            <p className="text-sm text-slate-400">호스트가 회의를 설정 중이에요</p>
-            <p className="text-xs text-slate-600">회의가 시작되면 자동으로 연결됩니다</p>
-            <button
-              className={`w-full py-3 rounded-xl text-sm font-medium border transition-all ${
-                myReady
-                  ? 'bg-green-500/20 border-green-500/50 text-green-300'
-                  : 'btn-secondary'
-              }`}
-              onClick={handleToggleReady}
-            >
-              {myReady ? '✓ 준비 완료' : '준비 완료'}
-            </button>
+          <div className="card space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+              <p className="text-sm text-slate-400">호스트가 회의를 설정 중이에요</p>
+            </div>
+            {setupChat.length > 0 ? (
+              <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                {setupChat.map((msg, i) => (
+                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[85%] px-3 py-1.5 rounded-2xl text-xs leading-relaxed ${
+                      msg.role === 'user'
+                        ? 'bg-accent/20 text-slate-200 rounded-tr-sm'
+                        : 'bg-surface2 border border-border text-slate-300 rounded-tl-sm'
+                    }`}>
+                      {msg.text}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-600">회의가 시작되면 자동으로 연결됩니다</p>
+            )}
           </div>
         )}
       </div>
@@ -773,7 +774,6 @@ export default function AiPage() {
       setJoinCodeInput('');
       setShowJoinInput(false);
       setJoinError('');
-      setIsReadyLocal(false);
       setInterimText('');
       setCurrentSpeaker('');
       setSummaryView(null);
