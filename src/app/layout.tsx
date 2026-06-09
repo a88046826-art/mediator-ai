@@ -4,8 +4,8 @@ import { Nav } from '@/components/layout/Nav';
 import { Toast } from '@/components/layout/Toast';
 
 export const metadata: Metadata = {
-  title: 'CODETEST | 팀 성향 진단 & AI 중재자',
-  description: '팀원 성향을 진단하고, AI 중재자가 회의 갈등을 해결합니다.',
+  title: 'MEDIATOR | AI 실시간 회의 중재자',
+  description: '팀원들이 각자 기기에서 접속하고, AI가 대화를 실시간으로 분석해 갈등을 중재합니다.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
