@@ -3,8 +3,9 @@ import { ref, onValue, off } from 'firebase/database';
 import { getDb, isFirebaseConfigured } from '@/lib/firebase';
 import type { SessionData, SessionTranscriptEntry, SessionAiMessage, SetupChatEntry } from '@/lib/session';
 
-export function useSession(sessionCode: string | null): SessionData | null {
-  const [state, setState] = useState<SessionData | null>(null);
+// undefined = 아직 Firebase 응답 대기 중, null = 세션 없음, SessionData = 세션 있음
+export function useSession(sessionCode: string | null): SessionData | null | undefined {
+  const [state, setState] = useState<SessionData | null | undefined>(undefined);
 
   useEffect(() => {
     if (!sessionCode || !isFirebaseConfigured) {
@@ -12,11 +13,14 @@ export function useSession(sessionCode: string | null): SessionData | null {
       return;
     }
 
+    setState(undefined); // 코드 바뀌면 로딩 상태로 리셋
+
     let sessionRef: ReturnType<typeof ref>;
     try {
       const db = getDb();
       sessionRef = ref(db, `sessions/${sessionCode}`);
     } catch {
+      setState(null);
       return;
     }
 
@@ -54,7 +58,7 @@ export function useSession(sessionCode: string | null): SessionData | null {
           setupChat,
         });
       },
-      () => { /* permission/network error — stay in current state */ },
+      () => { setState(null); },
     );
 
     return () => off(sessionRef);

@@ -321,8 +321,25 @@ export default function AiPage() {
   const MAX_SESSION_CALLS = 30;
   const MAX_URGENT_CALLS = 50;
 
+  // localStorage 헬퍼
+  const saveSession = (code: string, name: string) => {
+    localStorage.setItem('mediator-session-code', code);
+    localStorage.setItem('mediator-my-name', name);
+  };
+  const clearSavedSession = () => {
+    localStorage.removeItem('mediator-session-code');
+    localStorage.removeItem('mediator-my-name');
+  };
+
+  // 마운트: deviceId 초기화 + localStorage에서 이전 세션 복원 시도
   useEffect(() => {
     deviceIdRef.current = getDeviceId();
+    const savedCode = localStorage.getItem('mediator-session-code');
+    const savedName = localStorage.getItem('mediator-my-name');
+    if (savedCode) {
+      setMyName(savedName ?? '');
+      setSessionCode(savedCode); // useSession이 Firebase 구독 시작
+    }
   }, []);
 
   // Firebase session state
@@ -334,6 +351,33 @@ export default function AiPage() {
   teamSummaryRef.current = sessionState
     ? Object.values(sessionState.members).map((m) => m.name).join(', ')
     : '';
+
+  // 페이지 복귀 시 세션 복원: phase='createOrJoin' + sessionCode 있음 + Firebase 응답 받으면 phase 결정
+  useEffect(() => {
+    if (phase !== 'createOrJoin' || !sessionCode) return;
+    if (sessionState === undefined) return; // Firebase 아직 응답 전
+    if (sessionState === null) {
+      // 세션이 Firebase에 없음 (만료 등)
+      clearSavedSession();
+      setSessionCode(null);
+      return;
+    }
+    if (sessionState.status === 'lobby') {
+      setPhase('lobby');
+    } else if (sessionState.status === 'meeting') {
+      // 이미 진행된 항목들 재분석 방지
+      lastAnalyzedCountRef.current = sessionState.transcript.length;
+      lastUrgentEntryIdRef.current = sessionState.transcript[sessionState.transcript.length - 1]?.id ?? '';
+      prevAiLengthRef.current = sessionState.aiMessages.filter((m) => m.role === 'ai').length;
+      setPhase('meeting');
+    } else if (sessionState.status === 'ended') {
+      summaryTranscriptRef.current = sessionState.transcript;
+      summaryAiMessagesRef.current = sessionState.aiMessages;
+      setPhase('summary');
+    }
+  // phase가 'createOrJoin'일 때만 실행, 이후 전환은 아래 auto-transition이 담당
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionState, sessionCode]);
 
   // Auto-transition: lobby → meeting when host starts
   useEffect(() => {
@@ -546,6 +590,20 @@ export default function AiPage() {
   }, [chatInput, isChatting, showToast, sessionState?.transcript]);
 
   // ── CREATE OR JOIN ──────────────────────────────────────────────────────────
+  // 복원 중 로딩 스피너 (localStorage에 코드 있지만 Firebase 아직 응답 전)
+  if (phase === 'createOrJoin' && sessionCode !== null && sessionState === undefined) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <div className="flex gap-1">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="w-2 h-2 rounded-full bg-accent animate-pulse" style={{ animationDelay: `${i * 0.2}s` }} />
+          ))}
+        </div>
+        <p className="text-slate-500 text-sm">이전 회의방 복원 중...</p>
+      </div>
+    );
+  }
+
   if (phase === 'createOrJoin') {
     const handleCreate = async () => {
       if (!myName.trim()) { showToast('이름을 입력하세요', 'error'); return; }
@@ -553,6 +611,7 @@ export default function AiPage() {
       setIsCreating(true);
       try {
         const code = await createSession(deviceIdRef.current, myName.trim());
+        saveSession(code, myName.trim());
         setSessionCode(code);
         setPhase('lobby');
       } catch {
@@ -572,6 +631,7 @@ export default function AiPage() {
       try {
         const ok = await joinSession(code, deviceIdRef.current, myName.trim());
         if (!ok) { setJoinError('존재하지 않거나 이미 시작된 방이에요'); return; }
+        saveSession(code, myName.trim());
         setSessionCode(code);
         setPhase('lobby');
       } catch {
@@ -864,6 +924,7 @@ export default function AiPage() {
 
     const handleNewMeeting = () => {
       stop();
+      clearSavedSession();
       setSessionCode(null);
       setMyName('');
       setJoinCodeInput('');
