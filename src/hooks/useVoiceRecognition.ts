@@ -192,9 +192,10 @@ function useWebSpeechVoice({ onResult, onInterim, onError }: Options) {
 
 const SAMPLE_RATE        = 16000;
 const CHUNK_INTERVAL_MS  = 5000;
-const SILENCE_THRESHOLD  = 8;   // 멀리서 말해도 감지 (float32 RMS * 127 기준)
-const SILENCE_MS         = 800;  // 문장 중간 절단 방지
-const MIN_SPEECH_MS      = 200;
+const SILENCE_THRESHOLD  = 8;
+const SILENCE_MS         = 800;
+const MIN_SPEECH_MS      = 500;  // 200ms → 500ms: 너무 짧은 조각 제거
+const OVERLAP_SAMPLES    = SAMPLE_RATE * 0.5; // 이전 청크 마지막 500ms overlap
 
 // 디바이스 실제 샘플레이트 → 16000Hz 다운샘플 (선형 보간)
 function resampleTo16k(input: Float32Array, fromRate: number): Int16Array {
@@ -213,6 +214,27 @@ function resampleTo16k(input: Float32Array, fromRate: number): Int16Array {
     const t = src - lo;
     const s = input[lo] * (1 - t) + input[hi] * t;
     out[i] = Math.max(-32768, Math.min(32767, Math.round(s * 32768)));
+  }
+  return out;
+}
+
+// 볼륨 정규화: 최대 진폭을 목표값(0.7)으로 스케일
+function normalize(samples: Int16Array): Int16Array {
+  let max = 0;
+  for (let i = 0; i < samples.length; i++) { const a = Math.abs(samples[i]); if (a > max) max = a; }
+  if (max < 1000) return samples; // 너무 조용하면 노이즈 증폭 방지
+  const scale = Math.min(32767 * 0.7 / max, 3.0); // 최대 3배까지만 증폭
+  const out = new Int16Array(samples.length);
+  for (let i = 0; i < samples.length; i++) out[i] = Math.max(-32768, Math.min(32767, Math.round(samples[i] * scale)));
+  return out;
+}
+
+// pre-emphasis: 고주파(자음) 강조 — y[n] = x[n] - 0.97 * x[n-1]
+function preEmphasis(samples: Int16Array): Int16Array {
+  const out = new Int16Array(samples.length);
+  out[0] = samples[0];
+  for (let i = 1; i < samples.length; i++) {
+    out[i] = Math.max(-32768, Math.min(32767, Math.round(samples[i] - 0.97 * samples[i - 1])));
   }
   return out;
 }
@@ -258,7 +280,8 @@ function useClovaVoice({ onResult, onInterim, onError }: Options) {
   const silenceTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chunkIntervalRef  = useRef<ReturnType<typeof setInterval> | null>(null);
   const isSendingRef      = useRef(false);
-  const hasSpeechRef      = useRef(false); // 실제 발화 감지 여부 — 소음만 있으면 전송 안 함
+  const hasSpeechRef      = useRef(false);
+  const overlapRef        = useRef<Int16Array | null>(null); // 이전 청크 마지막 500ms
   const lastInterimRef    = useRef('');
 
   const setInterim = useCallback((text: string) => {
@@ -287,9 +310,19 @@ function useClovaVoice({ onResult, onInterim, onError }: Options) {
     totalSamplesRef.current = 0;
     if (total < SAMPLE_RATE * (MIN_SPEECH_MS / 1000)) return;
 
-    const combined = new Int16Array(total);
+    // 이전 청크 overlap 붙이기 (청크 경계 단어 보완)
+    const prev = overlapRef.current;
+    const payloadLen = (prev ? prev.length : 0) + total;
+    const combined = new Int16Array(payloadLen);
     let off = 0;
+    if (prev) { combined.set(prev, 0); off = prev.length; }
     for (const c of chunks) { combined.set(c, off); off += c.length; }
+
+    // 다음 청크를 위해 마지막 500ms 보존
+    overlapRef.current = combined.slice(Math.max(0, combined.length - OVERLAP_SAMPLES));
+
+    // 정규화 + pre-emphasis 적용
+    const processed = preEmphasis(normalize(combined));
 
     isSendingRef.current = true;
     setInterim('인식 중...');
@@ -297,7 +330,7 @@ function useClovaVoice({ onResult, onInterim, onError }: Options) {
       const res = await fetch('/api/stt', {
         method: 'POST',
         headers: { 'Content-Type': 'audio/wav' },
-        body: encodeWAV(combined, SAMPLE_RATE),
+        body: encodeWAV(processed, SAMPLE_RATE),
       });
       if (res.ok) {
         const { text } = await res.json() as { text: string };
@@ -389,7 +422,7 @@ function useClovaVoice({ onResult, onInterim, onError }: Options) {
       silence.gain.value = 0;
       src.connect(analyser); analyser.connect(processor); processor.connect(silence); silence.connect(ctx.destination);
 
-      pcmChunksRef.current = []; totalSamplesRef.current = 0; hasSpeechRef.current = false;
+      pcmChunksRef.current = []; totalSamplesRef.current = 0; hasSpeechRef.current = false; overlapRef.current = null;
       isListeningRef.current = true;
       setIsListening(true);
 
