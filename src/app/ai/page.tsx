@@ -721,9 +721,6 @@ export default function AiPage() {
             <MeetingSetup
               members={memberList}
               onStart={handleHostStart}
-              onMessage={(role, text) => {
-                if (sessionCodeRef.current) addSetupEntry(sessionCodeRef.current, role, text);
-              }}
             />
           </div>
         ) : (
