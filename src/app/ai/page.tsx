@@ -342,6 +342,30 @@ export default function AiPage() {
     }
   }, []);
 
+  const stopRef = useRef<() => void>(() => {});
+
+  // 세션 완전 초기화 (로비/요약 화면 공용)
+  const handleNewMeeting = useCallback(() => {
+    stopRef.current();
+    clearSavedSession();
+    setSessionCode(null);
+    setMyName('');
+    setJoinCodeInput('');
+    setShowJoinInput(false);
+    setJoinError('');
+    setInterimText('');
+    setSummaryView(null);
+    setSummaryContent('');
+    setChatInput('');
+    chatHistoryRef.current = [];
+    lastAnalyzedCountRef.current = 0;
+    sessionCallCountRef.current = 0;
+    urgentCallCountRef.current = 0;
+    setUnreadAiCount(0);
+    prevAiLengthRef.current = 0;
+    setPhase('createOrJoin');
+  }, []);
+
   // Firebase session state
   const sessionState = useSession(sessionCode);
   const isHost = sessionState?.host === deviceIdRef.current;
@@ -519,6 +543,7 @@ export default function AiPage() {
       else showToast(`음성 오류: ${err}`, 'error');
     },
   });
+  stopRef.current = stop;
 
   // 디버그: 음성 인식 지원 여부 확인
   useEffect(() => {
@@ -748,9 +773,15 @@ export default function AiPage() {
               <span className="font-mono font-bold text-accent tracking-widest">{sessionCode}</span>
             </p>
           </div>
-          <span className="ml-auto px-2.5 py-1 rounded-full text-[10px] font-mono bg-accent/10 text-accent border border-accent/20">
+          <span className="px-2.5 py-1 rounded-full text-[10px] font-mono bg-accent/10 text-accent border border-accent/20">
             {isHost ? '호스트' : '참가자'}
           </span>
+          <button
+            onClick={handleNewMeeting}
+            className="ml-auto px-3 py-1.5 text-xs rounded-lg border border-border text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-colors"
+          >
+            새 회의방 만들기
+          </button>
         </div>
 
         {/* Member list */}
@@ -920,27 +951,6 @@ export default function AiPage() {
       a.download = `${viewLabel.replace(/ /g, '_')}_${dateStr}.txt`;
       a.click();
       URL.revokeObjectURL(url);
-    };
-
-    const handleNewMeeting = () => {
-      stop();
-      clearSavedSession();
-      setSessionCode(null);
-      setMyName('');
-      setJoinCodeInput('');
-      setShowJoinInput(false);
-      setJoinError('');
-      setInterimText('');
-      setSummaryView(null);
-      setSummaryContent('');
-      setChatInput('');
-      chatHistoryRef.current = [];
-      lastAnalyzedCountRef.current = 0;
-      sessionCallCountRef.current = 0;
-      urgentCallCountRef.current = 0;
-      setUnreadAiCount(0);
-      prevAiLengthRef.current = 0;
-      setPhase('createOrJoin');
     };
 
     return (
