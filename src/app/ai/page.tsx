@@ -343,6 +343,7 @@ export default function AiPage() {
   }, []);
 
   const stopRef = useRef<() => void>(() => {});
+  const recentlySentRef = useRef<Map<string, number>>(new Map());
 
   // 세션 완전 초기화 (로비/요약 화면 공용)
   const handleNewMeeting = useCallback(() => {
@@ -512,8 +513,13 @@ export default function AiPage() {
       showToast('세션 없음 — 방 코드를 확인하세요', 'error');
       return;
     }
-    // 1.5초 이내 중복 발화 스킵 (auto-restart로 인한 재인식 방지)
     const now = Date.now();
+    // 1.5초 이내 동일 텍스트 중복 전송 방지 (auto-restart로 인한 재인식 방지)
+    recentlySentRef.current.forEach((t, k) => {
+      if (now - t > 1500) recentlySentRef.current.delete(k);
+    });
+    if (recentlySentRef.current.has(text)) return;
+    recentlySentRef.current.set(text, now);
     const nowDate = new Date(now);
     const time = `${String(nowDate.getHours()).padStart(2, '0')}:${String(nowDate.getMinutes()).padStart(2, '0')}`;
     try {
