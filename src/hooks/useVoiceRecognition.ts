@@ -191,10 +191,31 @@ function useWebSpeechVoice({ onResult, onInterim, onError }: Options) {
 // ── Clova Speech 구현 ─────────────────────────────────────────────────────────
 
 const SAMPLE_RATE        = 16000;
-const CHUNK_INTERVAL_MS  = 5000; // 5초 fallback (주로 침묵 감지로 전송)
-const SILENCE_THRESHOLD  = 20;   // RMS (0~127) — 침묵 감지용
-const SILENCE_MS         = 600;  // 침묵 후 빠르게 전송
-const MIN_SPEECH_MS      = 200;  // 최소 발화 길이
+const CHUNK_INTERVAL_MS  = 5000;
+const SILENCE_THRESHOLD  = 20;
+const SILENCE_MS         = 800;  // 문장 중간 절단 방지
+const MIN_SPEECH_MS      = 200;
+
+// 디바이스 실제 샘플레이트 → 16000Hz 다운샘플 (선형 보간)
+function resampleTo16k(input: Float32Array, fromRate: number): Int16Array {
+  if (fromRate === SAMPLE_RATE) {
+    const out = new Int16Array(input.length);
+    for (let i = 0; i < input.length; i++) out[i] = Math.max(-32768, Math.min(32767, Math.round(input[i] * 32768)));
+    return out;
+  }
+  const ratio = fromRate / SAMPLE_RATE;
+  const len = Math.floor(input.length / ratio);
+  const out = new Int16Array(len);
+  for (let i = 0; i < len; i++) {
+    const src = i * ratio;
+    const lo = Math.floor(src);
+    const hi = Math.min(lo + 1, input.length - 1);
+    const t = src - lo;
+    const s = input[lo] * (1 - t) + input[hi] * t;
+    out[i] = Math.max(-32768, Math.min(32767, Math.round(s * 32768)));
+  }
+  return out;
+}
 
 function encodeWAV(samples: Int16Array, sampleRate: number): ArrayBuffer {
   const dataLen = samples.length * 2;
@@ -225,10 +246,11 @@ function useClovaVoice({ onResult, onInterim, onError }: Options) {
   useEffect(() => { onInterimRef.current = onInterim; }, [onInterim]);
   useEffect(() => { onErrorRef.current   = onError; },   [onError]);
 
-  const audioCtxRef  = useRef<AudioContext | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
-  const analyserRef  = useRef<AnalyserNode | null>(null);
-  const streamRef    = useRef<MediaStream | null>(null);
+  const audioCtxRef       = useRef<AudioContext | null>(null);
+  const processorRef      = useRef<ScriptProcessorNode | null>(null);
+  const analyserRef       = useRef<AnalyserNode | null>(null);
+  const streamRef         = useRef<MediaStream | null>(null);
+  const actualSampleRate  = useRef(SAMPLE_RATE);
 
   const pcmChunksRef    = useRef<Int16Array[]>([]);
   const totalSamplesRef = useRef(0);
@@ -246,7 +268,13 @@ function useClovaVoice({ onResult, onInterim, onError }: Options) {
   }, []);
 
   const flush = useCallback(async () => {
-    if (isSendingRef.current) return;
+    // 전송 중이면 완료 후 재시도 (발화 손실 방지)
+    if (isSendingRef.current) {
+      if (!silenceTimerRef.current) {
+        silenceTimerRef.current = setTimeout(() => { silenceTimerRef.current = null; void flush(); }, 300);
+      }
+      return;
+    }
     // 실제 발화가 없었으면 버퍼만 비우고 전송 안 함 (소음 hallucination 방지)
     if (!hasSpeechRef.current) {
       pcmChunksRef.current = [];
@@ -323,29 +351,27 @@ function useClovaVoice({ onResult, onInterim, onError }: Options) {
       const ctx = new Ctx({ sampleRate: SAMPLE_RATE }) as AudioContext;
       await ctx.resume();
       audioCtxRef.current = ctx;
+      actualSampleRate.current = ctx.sampleRate; // 실제 지원 샘플레이트 기록
 
       const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
       analyserRef.current = analyser;
 
       // eslint-disable-next-line @typescript-eslint/no-deprecated
       const processor = ctx.createScriptProcessor(4096, 1, 1);
       processorRef.current = processor;
 
-      const tdData = new Uint8Array(analyser.fftSize);
-
       processor.onaudioprocess = (e) => {
         if (!isListeningRef.current) return;
         const input = e.inputBuffer.getChannelData(0);
-        const pcm = new Int16Array(input.length);
-        for (let i = 0; i < input.length; i++) pcm[i] = Math.max(-32768, Math.min(32767, input[i] * 32768));
+        // 실제 샘플레이트 → 16000Hz 다운샘플 (48000Hz 기기 대응)
+        const pcm = resampleTo16k(input, actualSampleRate.current);
         pcmChunksRef.current.push(pcm);
         totalSamplesRef.current += pcm.length;
 
-        analyser.getByteTimeDomainData(tdData);
+        // RMS를 analyser 대신 input buffer 전체로 계산 (더 정확한 발화 감지)
         let rmsSum = 0;
-        for (let i = 0; i < tdData.length; i++) { const val = tdData[i] - 128; rmsSum += val * val; }
-        const rms = Math.sqrt(rmsSum / tdData.length);
+        for (let i = 0; i < input.length; i++) rmsSum += input[i] * input[i];
+        const rms = Math.sqrt(rmsSum / input.length) * 127;
 
         if (rms > SILENCE_THRESHOLD) {
           // 발화 감지 — 실제 말소리 있음
