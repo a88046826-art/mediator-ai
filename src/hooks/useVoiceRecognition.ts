@@ -190,11 +190,11 @@ function useWebSpeechVoice({ onResult, onInterim, onError }: Options) {
 
 // ── Clova Speech 구현 ─────────────────────────────────────────────────────────
 
-const SAMPLE_RATE       = 16000;
-const SILENCE_THRESHOLD = 20;   // 시간 도메인 RMS (0~127) — 모바일 주변 소음 대응
-const SILENCE_MS        = 800;
-const MIN_SPEECH_MS     = 300;
-const MAX_SPEECH_MS     = 8000; // 최대 8초 녹음 후 강제 전송
+const SAMPLE_RATE        = 16000;
+const CHUNK_INTERVAL_MS  = 3000; // 3초마다 자동 전송 (실시간 표시)
+const SILENCE_THRESHOLD  = 20;   // RMS (0~127) — 침묵 감지용
+const SILENCE_MS         = 600;  // 침묵 후 빠르게 전송
+const MIN_SPEECH_MS      = 200;  // 최소 발화 길이
 
 function encodeWAV(samples: Int16Array, sampleRate: number): ArrayBuffer {
   const dataLen = samples.length * 2;
@@ -232,10 +232,11 @@ function useClovaVoice({ onResult, onInterim, onError }: Options) {
 
   const pcmChunksRef    = useRef<Int16Array[]>([]);
   const totalSamplesRef = useRef(0);
-  const isListeningRef  = useRef(false);
-  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isSendingRef    = useRef(false);
-  const lastInterimRef  = useRef('');
+  const isListeningRef    = useRef(false);
+  const silenceTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chunkIntervalRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isSendingRef      = useRef(false);
+  const lastInterimRef    = useRef('');
 
   const setInterim = useCallback((text: string) => {
     if (text === lastInterimRef.current) return;
@@ -280,6 +281,7 @@ function useClovaVoice({ onResult, onInterim, onError }: Options) {
 
   const teardown = useCallback(() => {
     if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
+    if (chunkIntervalRef.current) { clearInterval(chunkIntervalRef.current); chunkIntervalRef.current = null; }
     try { processorRef.current?.disconnect(); } catch { /* ignore */ }
     try { analyserRef.current?.disconnect(); } catch { /* ignore */ }
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -338,13 +340,11 @@ function useClovaVoice({ onResult, onInterim, onError }: Options) {
         const rms = Math.sqrt(rmsSum / tdData.length);
 
         if (rms > SILENCE_THRESHOLD) {
+          // 발화 중 — 침묵 타이머 리셋
           if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
           setInterim('🎙 말하는 중...');
-          // 최대 녹음 시간 초과 시 강제 전송
-          if (totalSamplesRef.current >= SAMPLE_RATE * (MAX_SPEECH_MS / 1000)) {
-            void flush();
-          }
         } else if (totalSamplesRef.current > SAMPLE_RATE * (MIN_SPEECH_MS / 1000)) {
+          // 침묵 감지 — 빠르게 전송 (interval보다 빠름)
           scheduleFlush();
         }
       };
@@ -357,6 +357,15 @@ function useClovaVoice({ onResult, onInterim, onError }: Options) {
       pcmChunksRef.current = []; totalSamplesRef.current = 0;
       isListeningRef.current = true;
       setIsListening(true);
+
+      // 3초마다 자동 전송 — 녹음 중지 안 눌러도 실시간으로 텍스트 표시
+      chunkIntervalRef.current = setInterval(() => {
+        if (isListeningRef.current && !isSendingRef.current &&
+            totalSamplesRef.current > SAMPLE_RATE * (MIN_SPEECH_MS / 1000)) {
+          if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
+          void flush();
+        }
+      }, CHUNK_INTERVAL_MS);
     } catch (err) {
       const isPerm = err instanceof Error && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError');
       onErrorRef.current?.(isPerm ? '마이크 권한을 허용해 주세요.' : '마이크를 시작할 수 없습니다.');
