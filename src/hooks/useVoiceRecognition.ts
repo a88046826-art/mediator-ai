@@ -190,10 +190,11 @@ function useWebSpeechVoice({ onResult, onInterim, onError }: Options) {
 
 // ── Clova Speech 구현 ─────────────────────────────────────────────────────────
 
-const SAMPLE_RATE      = 16000;
-const SILENCE_THRESHOLD = 8;   // 시간 도메인 RMS (0~127)
-const SILENCE_MS        = 1500;
-const MIN_SPEECH_MS     = 400;
+const SAMPLE_RATE       = 16000;
+const SILENCE_THRESHOLD = 20;   // 시간 도메인 RMS (0~127) — 모바일 주변 소음 대응
+const SILENCE_MS        = 800;
+const MIN_SPEECH_MS     = 300;
+const MAX_SPEECH_MS     = 8000; // 최대 8초 녹음 후 강제 전송
 
 function encodeWAV(samples: Int16Array, sampleRate: number): ArrayBuffer {
   const dataLen = samples.length * 2;
@@ -339,6 +340,10 @@ function useClovaVoice({ onResult, onInterim, onError }: Options) {
         if (rms > SILENCE_THRESHOLD) {
           if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
           setInterim('🎙 말하는 중...');
+          // 최대 녹음 시간 초과 시 강제 전송
+          if (totalSamplesRef.current >= SAMPLE_RATE * (MAX_SPEECH_MS / 1000)) {
+            void flush();
+          }
         } else if (totalSamplesRef.current > SAMPLE_RATE * (MIN_SPEECH_MS / 1000)) {
           scheduleFlush();
         }
