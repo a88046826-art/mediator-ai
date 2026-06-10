@@ -36,11 +36,11 @@ function useWebSpeechVoice({ onResult, onInterim, onError }: Options) {
   const userStoppedRef    = useRef(false);
   const isListeningRef    = useRef(false);
   const sessionIdRef      = useRef(0);
-  const nextFinalIndexRef      = useRef(0);
-  const lastFinalTextRef       = useRef('');
-  const lastFinalClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const bufferRef              = useRef('');
-  const flushTimerRef          = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nextFinalIndexRef = useRef(0);
+  // 최근 처리된 isFinal 텍스트를 시간과 함께 기록 (단어 하나만이 아닌 전체 목록)
+  const recentFinalsRef   = useRef<Map<string, number>>(new Map());
+  const bufferRef         = useRef('');
+  const flushTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flushBuffer = useCallback(() => {
     if (flushTimerRef.current) { clearTimeout(flushTimerRef.current); flushTimerRef.current = null; }
@@ -89,14 +89,13 @@ function useWebSpeechVoice({ onResult, onInterim, onError }: Options) {
           if (i >= nextFinalIndexRef.current) {
             nextFinalIndexRef.current = i + 1;
             void confidence; // confidence 필터 제거 — 저신뢰도 결과도 모두 수용
-            if (transcript !== lastFinalTextRef.current) {
-              lastFinalTextRef.current = transcript;
-              // 시간 지나면 중복 가드 해제 (의도적 반복 허용)
-              if (lastFinalClearTimerRef.current) clearTimeout(lastFinalClearTimerRef.current);
-              lastFinalClearTimerRef.current = setTimeout(() => {
-                lastFinalTextRef.current = '';
-                lastFinalClearTimerRef.current = null;
-              }, DUPLICATE_GUARD_MS);
+            const nowMs = Date.now();
+            // 만료된 항목 정리
+            recentFinalsRef.current.forEach((t, k) => {
+              if (nowMs - t > DUPLICATE_GUARD_MS) recentFinalsRef.current.delete(k);
+            });
+            if (!recentFinalsRef.current.has(transcript)) {
+              recentFinalsRef.current.set(transcript, nowMs);
               bufferRef.current = bufferRef.current ? bufferRef.current + ' ' + transcript : transcript;
               scheduleFlush();
             }
@@ -157,7 +156,7 @@ function useWebSpeechVoice({ onResult, onInterim, onError }: Options) {
     userStoppedRef.current = false;
     isListeningRef.current = true;
     bufferRef.current = '';
-    lastFinalTextRef.current = '';
+    recentFinalsRef.current.clear();
     setIsListening(true);
     createAndStart();
   }, [createAndStart]);
