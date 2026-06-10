@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const CLOVA_URL = 'https://naveropenapi.apigw.ntruss.com/recog/v1/stt?lang=Kor';
-const MAX_BYTES = 10 * 1024 * 1024; // 10MB
+const CLOVA_SPEECH_URL = 'https://clovaspeech-gw.ncloud.com/recog/v1/stt?lang=Kor&format=WAV';
+const CLOVA_CSR_URL    = 'https://naveropenapi.apigw.ntruss.com/recog/v1/stt?lang=Kor';
+const MAX_BYTES = 10 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
-  const clientId = process.env.CLOVA_CLIENT_ID;
-  const clientSecret = process.env.CLOVA_CLIENT_SECRET;
+  const speechSecret = process.env.CLOVA_SPEECH_SECRET;
+  const csrId        = process.env.CLOVA_CLIENT_ID;
+  const csrSecret    = process.env.CLOVA_CLIENT_SECRET;
 
-  if (!clientId || !clientSecret) {
+  if (!speechSecret && (!csrId || !csrSecret)) {
     return NextResponse.json({ error: 'STT not configured' }, { status: 500 });
   }
 
@@ -22,19 +24,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ text: '' });
     }
 
-    const res = await fetch(CLOVA_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/octet-stream',
-        'X-NCP-APIGW-API-KEY-ID': clientId,
-        'X-NCP-APIGW-API-KEY': clientSecret,
-      },
-      body: audio,
-    });
+    // CLOVA Speech (장문/스트리밍 도메인) 우선, 없으면 CSR 폴백
+    let res: Response;
+    if (speechSecret) {
+      res = await fetch(CLOVA_SPEECH_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'X-CLOVASPEECH-API-KEY': speechSecret,
+        },
+        body: audio,
+      });
+    } else {
+      res = await fetch(CLOVA_CSR_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'X-NCP-APIGW-API-KEY-ID': csrId!,
+          'X-NCP-APIGW-API-KEY': csrSecret!,
+        },
+        body: audio,
+      });
+    }
 
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      throw new Error(`Clova ${res.status}: ${body}`);
+      throw new Error(`STT ${res.status}: ${body}`);
     }
 
     const data = await res.json() as { text?: string };
