@@ -10,7 +10,7 @@ interface Options {
 
 // ── Web Speech API 구현 ────────────────────────────────────────────────────────
 
-const FLUSH_DELAY = 700;
+const FLUSH_DELAY = 250;
 const DUPLICATE_GUARD_MS = 2500; // 같은 문장이 재시작 직후 반복되는 버그 방어
 
 function checkWebSpeechSupport() {
@@ -129,6 +129,7 @@ function useWebSpeechVoice({ onResult, onInterim, onError }: Options) {
       recRef.current = null;
       onInterimRef.current?.('');
       if (!userStoppedRef.current && isListeningRef.current) {
+        flushBuffer(); // 세션 종료 시점에 즉시 확정 후 재시작
         setTimeout(createAndStart, 50);
       } else {
         flushBuffer();
