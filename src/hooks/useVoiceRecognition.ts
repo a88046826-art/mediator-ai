@@ -191,7 +191,7 @@ function useWebSpeechVoice({ onResult, onInterim, onError }: Options) {
 // ── Clova Speech 구현 ─────────────────────────────────────────────────────────
 
 const SAMPLE_RATE        = 16000;
-const CHUNK_INTERVAL_MS  = 3000; // 3초마다 자동 전송 (실시간 표시)
+const CHUNK_INTERVAL_MS  = 1000; // 1초마다 자동 전송 (실시간 표시)
 const SILENCE_THRESHOLD  = 20;   // RMS (0~127) — 침묵 감지용
 const SILENCE_MS         = 600;  // 침묵 후 빠르게 전송
 const MIN_SPEECH_MS      = 200;  // 최소 발화 길이
