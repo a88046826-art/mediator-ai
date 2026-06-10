@@ -8,54 +8,215 @@ interface Options {
   onError?: (err: string) => void;
 }
 
-// 16kHz mono — Clova 권장 최소 사양
-const SAMPLE_RATE = 16000;
-// 시간 도메인 RMS 기준 묵음 임계값 (0~127 스케일)
-const SILENCE_THRESHOLD = 8;
-// 묵음 N ms 지속 시 청크 전송
-const SILENCE_MS = 1500;
-// 이보다 짧으면 노이즈로 판단해 버림
-const MIN_SPEECH_MS = 400;
+// ── Web Speech API 구현 ────────────────────────────────────────────────────────
+
+const MIN_CONFIDENCE = 0.4;
+const FLUSH_DELAY = 1500;
+
+function checkWebSpeechSupport() {
+  if (typeof window === 'undefined') return false;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const w = window as any;
+  return !!(w.SpeechRecognition ?? w.webkitSpeechRecognition);
+}
+
+function useWebSpeechVoice({ onResult, onInterim, onError }: Options) {
+  const [isListening, setIsListening] = useState(false);
+  const [isSupported] = useState(checkWebSpeechSupport);
+
+  const onResultRef  = useRef(onResult);
+  const onInterimRef = useRef(onInterim);
+  const onErrorRef   = useRef(onError);
+  useEffect(() => { onResultRef.current  = onResult; },  [onResult]);
+  useEffect(() => { onInterimRef.current = onInterim; }, [onInterim]);
+  useEffect(() => { onErrorRef.current   = onError; },   [onError]);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recRef            = useRef<any>(null);
+  const userStoppedRef    = useRef(false);
+  const isListeningRef    = useRef(false);
+  const sessionIdRef      = useRef(0);
+  const nextFinalIndexRef = useRef(0);
+  const lastFinalTextRef  = useRef('');
+  const bufferRef         = useRef('');
+  const flushTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flushBuffer = useCallback(() => {
+    if (flushTimerRef.current) { clearTimeout(flushTimerRef.current); flushTimerRef.current = null; }
+    const text = bufferRef.current.trim();
+    if (text) { bufferRef.current = ''; onResultRef.current(text); }
+  }, []);
+
+  const scheduleFlush = useCallback(() => {
+    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+    flushTimerRef.current = setTimeout(() => {
+      flushTimerRef.current = null;
+      const text = bufferRef.current.trim();
+      if (text) { bufferRef.current = ''; onResultRef.current(text); }
+    }, FLUSH_DELAY);
+  }, []);
+
+  const createAndStart = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any;
+    const SpeechRec = w.SpeechRecognition ?? w.webkitSpeechRecognition;
+    if (!SpeechRec) return;
+
+    if (recRef.current) { try { recRef.current.abort(); } catch { /* ignore */ } recRef.current = null; }
+
+    const mySession = ++sessionIdRef.current;
+    nextFinalIndexRef.current = 0;
+
+    const rec = new SpeechRec();
+    rec.lang = 'ko-KR';
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
+    recRef.current = rec;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rec.onresult = (e: any) => {
+      if (mySession !== sessionIdRef.current) return;
+      let interimText = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const result = e.results[i];
+        const transcript = result[0].transcript.trim();
+        if (!transcript) continue;
+        const confidence = result[0].confidence;
+        if (result.isFinal) {
+          if (i >= nextFinalIndexRef.current) {
+            nextFinalIndexRef.current = i + 1;
+            if (confidence === 0 || confidence >= MIN_CONFIDENCE) {
+              if (transcript !== lastFinalTextRef.current) {
+                lastFinalTextRef.current = transcript;
+                bufferRef.current = bufferRef.current ? bufferRef.current + ' ' + transcript : transcript;
+                scheduleFlush();
+              }
+            }
+            onInterimRef.current?.('');
+          }
+        } else {
+          interimText += transcript;
+        }
+      }
+      if (interimText) onInterimRef.current?.(interimText);
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rec.onerror = (e: any) => {
+      if (mySession !== sessionIdRef.current) return;
+      if (e.error === 'no-speech' || e.error === 'aborted') return;
+      const msg =
+        e.error === 'not-allowed' ? '마이크 권한을 허용해 주세요.' :
+        e.error === 'network'     ? '네트워크 오류가 발생했습니다.' : e.error;
+      if (e.error === 'not-allowed') {
+        userStoppedRef.current = true;
+        isListeningRef.current = false;
+        setIsListening(false);
+      }
+      onErrorRef.current?.(msg);
+    };
+
+    rec.onend = () => {
+      if (mySession !== sessionIdRef.current) return;
+      recRef.current = null;
+      onInterimRef.current?.('');
+      if (!userStoppedRef.current && isListeningRef.current) {
+        setTimeout(createAndStart, 200);
+      } else {
+        flushBuffer();
+        isListeningRef.current = false;
+        setIsListening(false);
+      }
+    };
+
+    try { rec.start(); } catch {
+      recRef.current = null;
+      isListeningRef.current = false;
+      setIsListening(false);
+      onErrorRef.current?.('음성 인식을 시작할 수 없습니다.');
+    }
+  }, [scheduleFlush, flushBuffer]);
+
+  const start = useCallback(() => {
+    if (isListeningRef.current) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any;
+    if (!(w.SpeechRecognition ?? w.webkitSpeechRecognition)) {
+      onErrorRef.current?.('이 브라우저는 음성 인식을 지원하지 않습니다. Chrome을 사용해 주세요.');
+      return;
+    }
+    userStoppedRef.current = false;
+    isListeningRef.current = true;
+    bufferRef.current = '';
+    lastFinalTextRef.current = '';
+    setIsListening(true);
+    createAndStart();
+  }, [createAndStart]);
+
+  const stop = useCallback(() => {
+    if (!isListeningRef.current) return;
+    userStoppedRef.current = true;
+    isListeningRef.current = false;
+    setIsListening(false);
+    onInterimRef.current?.('');
+    flushBuffer();
+    try { recRef.current?.stop(); } catch { /* ignore */ }
+    recRef.current = null;
+  }, [flushBuffer]);
+
+  const toggle = useCallback(() => { isListeningRef.current ? stop() : start(); }, [start, stop]);
+
+  useEffect(() => {
+    return () => {
+      userStoppedRef.current = true;
+      isListeningRef.current = false;
+      sessionIdRef.current++;
+      flushBuffer();
+      try { recRef.current?.abort(); } catch { /* ignore */ }
+      recRef.current = null;
+    };
+  }, [flushBuffer]);
+
+  return { isListening, isSupported, toggle, stop };
+}
+
+// ── Clova Speech 구현 ─────────────────────────────────────────────────────────
+
+const SAMPLE_RATE      = 16000;
+const SILENCE_THRESHOLD = 8;   // 시간 도메인 RMS (0~127)
+const SILENCE_MS        = 1500;
+const MIN_SPEECH_MS     = 400;
 
 function encodeWAV(samples: Int16Array, sampleRate: number): ArrayBuffer {
   const dataLen = samples.length * 2;
   const buf = new ArrayBuffer(44 + dataLen);
   const v = new DataView(buf);
-  const w = (o: number, s: string) => {
-    for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i));
-  };
-
+  const w = (o: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
   w(0, 'RIFF'); v.setUint32(4, 36 + dataLen, true);
   w(8, 'WAVE'); w(12, 'fmt ');
-  v.setUint32(16, 16, true);   // fmt chunk size
-  v.setUint16(20, 1, true);    // PCM
-  v.setUint16(22, 1, true);    // mono
-  v.setUint32(24, sampleRate, true);
-  v.setUint32(28, sampleRate * 2, true); // byte rate
-  v.setUint16(32, 2, true);    // block align
-  v.setUint16(34, 16, true);   // 16-bit
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true);
+  v.setUint16(32, 2, true); v.setUint16(34, 16, true);
   w(36, 'data'); v.setUint32(40, dataLen, true);
-
   let o = 44;
-  for (let i = 0; i < samples.length; i++) {
-    v.setInt16(o, samples[i], true);
-    o += 2;
-  }
+  for (let i = 0; i < samples.length; i++) { v.setInt16(o, samples[i], true); o += 2; }
   return buf;
 }
 
-export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
+function useClovaVoice({ onResult, onInterim, onError }: Options) {
   const [isListening, setIsListening] = useState(false);
   const [isSupported] = useState(
     () => typeof window !== 'undefined' && !!navigator.mediaDevices?.getUserMedia,
   );
 
-  const onResultRef = useRef(onResult);
+  const onResultRef  = useRef(onResult);
   const onInterimRef = useRef(onInterim);
-  const onErrorRef = useRef(onError);
-  useEffect(() => { onResultRef.current = onResult; }, [onResult]);
+  const onErrorRef   = useRef(onError);
+  useEffect(() => { onResultRef.current  = onResult; },  [onResult]);
   useEffect(() => { onInterimRef.current = onInterim; }, [onInterim]);
-  useEffect(() => { onErrorRef.current = onError; }, [onError]);
+  useEffect(() => { onErrorRef.current   = onError; },   [onError]);
 
   const audioCtxRef  = useRef<AudioContext | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
@@ -69,7 +230,6 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
   const isSendingRef    = useRef(false);
   const lastInterimRef  = useRef('');
 
-  // setState를 오디오 콜백에서 매 프레임 호출하지 않도록 중복 제거
   const setInterim = useCallback((text: string) => {
     if (text === lastInterimRef.current) return;
     lastInterimRef.current = text;
@@ -78,13 +238,11 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
 
   const flush = useCallback(async () => {
     if (isSendingRef.current) return;
-    const chunks = pcmChunksRef.current.splice(0); // 원자적으로 비우기
-    const total = totalSamplesRef.current;
+    const chunks = pcmChunksRef.current.splice(0);
+    const total  = totalSamplesRef.current;
     totalSamplesRef.current = 0;
+    if (total < SAMPLE_RATE * (MIN_SPEECH_MS / 1000)) return;
 
-    if (total < SAMPLE_RATE * (MIN_SPEECH_MS / 1000)) return; // 너무 짧음 → 노이즈
-
-    // 청크 합치기
     const combined = new Int16Array(total);
     let off = 0;
     for (const c of chunks) { combined.set(c, off); off += c.length; }
@@ -97,29 +255,20 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
         headers: { 'Content-Type': 'audio/wav' },
         body: encodeWAV(combined, SAMPLE_RATE),
       });
-
       if (res.ok) {
         const { text } = await res.json() as { text: string };
         if (text?.trim()) onResultRef.current(text.trim());
       } else if (res.status === 500) {
         const { error } = await res.json() as { error: string };
-        if (error === 'STT not configured') {
-          onErrorRef.current?.('CLOVA_CLIENT_ID / CLOVA_CLIENT_SECRET 환경변수를 설정해 주세요.');
-        }
+        if (error === 'STT not configured') onErrorRef.current?.('CLOVA 환경변수를 설정해 주세요.');
       }
-    } catch { /* 네트워크 순단 — 녹음 계속 */ }
-    finally {
-      isSendingRef.current = false;
-      setInterim('');
-    }
+    } catch { /* 네트워크 순단 */ }
+    finally { isSendingRef.current = false; setInterim(''); }
   }, [setInterim]);
 
   const scheduleFlush = useCallback(() => {
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-    silenceTimerRef.current = setTimeout(() => {
-      silenceTimerRef.current = null;
-      flush();
-    }, SILENCE_MS);
+    silenceTimerRef.current = setTimeout(() => { silenceTimerRef.current = null; flush(); }, SILENCE_MS);
   }, [flush]);
 
   const teardown = useCallback(() => {
@@ -128,10 +277,8 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
     try { analyserRef.current?.disconnect(); } catch { /* ignore */ }
     streamRef.current?.getTracks().forEach((t) => t.stop());
     audioCtxRef.current?.close().catch(() => {});
-    processorRef.current = null;
-    analyserRef.current  = null;
-    streamRef.current    = null;
-    audioCtxRef.current  = null;
+    processorRef.current = null; analyserRef.current = null;
+    streamRef.current = null;   audioCtxRef.current = null;
   }, []);
 
   const stop = useCallback(() => {
@@ -139,7 +286,7 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
     isListeningRef.current = false;
     setIsListening(false);
     setInterim('');
-    flush(); // 남은 버퍼 전송 (비동기, fire-and-forget)
+    flush();
     teardown();
   }, [flush, teardown, setInterim]);
 
@@ -147,27 +294,17 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
     if (isListeningRef.current) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
       streamRef.current = stream;
-
-      // 마이크 스트림 끊기면 자동 정지
       stream.getAudioTracks()[0].addEventListener('ended', () => {
-        if (isListeningRef.current) {
-          stop();
-          onErrorRef.current?.('마이크 연결이 끊겼습니다. 다시 시작해 주세요.');
-        }
+        if (isListeningRef.current) { stop(); onErrorRef.current?.('마이크 연결이 끊겼습니다. 다시 시작해 주세요.'); }
       });
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const Ctx = window.AudioContext ?? (window as any).webkitAudioContext;
       const ctx = new Ctx({ sampleRate: SAMPLE_RATE }) as AudioContext;
-      await ctx.resume(); // iOS 필수
+      await ctx.resume();
       audioCtxRef.current = ctx;
 
       const analyser = ctx.createAnalyser();
@@ -178,77 +315,53 @@ export function useVoiceRecognition({ onResult, onInterim, onError }: Options) {
       const processor = ctx.createScriptProcessor(4096, 1, 1);
       processorRef.current = processor;
 
-      const tdData = new Uint8Array(analyser.fftSize); // 시간 도메인 버퍼
+      const tdData = new Uint8Array(analyser.fftSize);
 
       processor.onaudioprocess = (e) => {
         if (!isListeningRef.current) return;
         const input = e.inputBuffer.getChannelData(0);
-
-        // Float32 → Int16 변환
         const pcm = new Int16Array(input.length);
-        for (let i = 0; i < input.length; i++) {
-          pcm[i] = Math.max(-32768, Math.min(32767, input[i] * 32768));
-        }
+        for (let i = 0; i < input.length; i++) pcm[i] = Math.max(-32768, Math.min(32767, input[i] * 32768));
         pcmChunksRef.current.push(pcm);
         totalSamplesRef.current += pcm.length;
 
-        // 시간 도메인 RMS로 묵음 감지 (주파수 도메인보다 정확)
         analyser.getByteTimeDomainData(tdData);
         let rmsSum = 0;
-        for (let i = 0; i < tdData.length; i++) {
-          const v = tdData[i] - 128;
-          rmsSum += v * v;
-        }
+        for (let i = 0; i < tdData.length; i++) { const val = tdData[i] - 128; rmsSum += val * val; }
         const rms = Math.sqrt(rmsSum / tdData.length);
 
         if (rms > SILENCE_THRESHOLD) {
-          // 발화 감지 — 묵음 타이머 리셋
-          if (silenceTimerRef.current) {
-            clearTimeout(silenceTimerRef.current);
-            silenceTimerRef.current = null;
-          }
+          if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
           setInterim('🎙 말하는 중...');
         } else if (totalSamplesRef.current > SAMPLE_RATE * (MIN_SPEECH_MS / 1000)) {
-          // 묵음 + 충분한 데이터 → 전송 예약
           scheduleFlush();
         }
       };
 
-      // source → analyser → processor → silence(gain=0) → destination
       const src = ctx.createMediaStreamSource(stream);
       const silence = ctx.createGain();
-      silence.gain.value = 0; // 스피커 피드백 방지
+      silence.gain.value = 0;
+      src.connect(analyser); analyser.connect(processor); processor.connect(silence); silence.connect(ctx.destination);
 
-      src.connect(analyser);
-      analyser.connect(processor);
-      processor.connect(silence);
-      silence.connect(ctx.destination);
-
-      pcmChunksRef.current = [];
-      totalSamplesRef.current = 0;
+      pcmChunksRef.current = []; totalSamplesRef.current = 0;
       isListeningRef.current = true;
       setIsListening(true);
     } catch (err) {
-      const isPermission =
-        err instanceof Error &&
-        (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError');
-      onErrorRef.current?.(
-        isPermission ? '마이크 권한을 허용해 주세요.' : '마이크를 시작할 수 없습니다.',
-      );
+      const isPerm = err instanceof Error && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError');
+      onErrorRef.current?.(isPerm ? '마이크 권한을 허용해 주세요.' : '마이크를 시작할 수 없습니다.');
     }
   }, [scheduleFlush, setInterim, stop]);
 
-  const toggle = useCallback(() => {
-    isListeningRef.current ? stop() : start();
-  }, [start, stop]);
+  const toggle = useCallback(() => { isListeningRef.current ? stop() : start(); }, [start, stop]);
 
   useEffect(() => {
-    return () => {
-      isListeningRef.current = false;
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      teardown();
-    };
+    return () => { isListeningRef.current = false; if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current); teardown(); };
   }, [teardown]);
 
   return { isListening, isSupported, toggle, stop };
 }
+
+// ── 환경변수 기반 스위칭 ───────────────────────────────────────────────────────
+// NEXT_PUBLIC_CLOVA_ENABLED=true 설정 시 Clova, 없으면 Web Speech API 폴백
+export const useVoiceRecognition =
+  process.env.NEXT_PUBLIC_CLOVA_ENABLED === 'true' ? useClovaVoice : useWebSpeechVoice;
