@@ -10,8 +10,8 @@ interface Options {
 
 // ── Web Speech API 구현 ────────────────────────────────────────────────────────
 
-const MIN_CONFIDENCE = 0.4;
-const FLUSH_DELAY = 1500;
+const FLUSH_DELAY = 700;
+const DUPLICATE_GUARD_MS = 2500; // 같은 문장이 재시작 직후 반복되는 버그 방어
 
 function checkWebSpeechSupport() {
   if (typeof window === 'undefined') return false;
@@ -36,10 +36,11 @@ function useWebSpeechVoice({ onResult, onInterim, onError }: Options) {
   const userStoppedRef    = useRef(false);
   const isListeningRef    = useRef(false);
   const sessionIdRef      = useRef(0);
-  const nextFinalIndexRef = useRef(0);
-  const lastFinalTextRef  = useRef('');
-  const bufferRef         = useRef('');
-  const flushTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nextFinalIndexRef      = useRef(0);
+  const lastFinalTextRef       = useRef('');
+  const lastFinalClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bufferRef              = useRef('');
+  const flushTimerRef          = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flushBuffer = useCallback(() => {
     if (flushTimerRef.current) { clearTimeout(flushTimerRef.current); flushTimerRef.current = null; }
@@ -87,12 +88,17 @@ function useWebSpeechVoice({ onResult, onInterim, onError }: Options) {
         if (result.isFinal) {
           if (i >= nextFinalIndexRef.current) {
             nextFinalIndexRef.current = i + 1;
-            if (confidence === 0 || confidence >= MIN_CONFIDENCE) {
-              if (transcript !== lastFinalTextRef.current) {
-                lastFinalTextRef.current = transcript;
-                bufferRef.current = bufferRef.current ? bufferRef.current + ' ' + transcript : transcript;
-                scheduleFlush();
-              }
+            void confidence; // confidence 필터 제거 — 저신뢰도 결과도 모두 수용
+            if (transcript !== lastFinalTextRef.current) {
+              lastFinalTextRef.current = transcript;
+              // 시간 지나면 중복 가드 해제 (의도적 반복 허용)
+              if (lastFinalClearTimerRef.current) clearTimeout(lastFinalClearTimerRef.current);
+              lastFinalClearTimerRef.current = setTimeout(() => {
+                lastFinalTextRef.current = '';
+                lastFinalClearTimerRef.current = null;
+              }, DUPLICATE_GUARD_MS);
+              bufferRef.current = bufferRef.current ? bufferRef.current + ' ' + transcript : transcript;
+              scheduleFlush();
             }
             onInterimRef.current?.('');
           }
@@ -123,7 +129,7 @@ function useWebSpeechVoice({ onResult, onInterim, onError }: Options) {
       recRef.current = null;
       onInterimRef.current?.('');
       if (!userStoppedRef.current && isListeningRef.current) {
-        setTimeout(createAndStart, 200);
+        setTimeout(createAndStart, 50);
       } else {
         flushBuffer();
         isListeningRef.current = false;
