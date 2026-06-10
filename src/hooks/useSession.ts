@@ -3,13 +3,13 @@ import { ref, onValue, off } from 'firebase/database';
 import { getDb, isFirebaseConfigured } from '@/lib/firebase';
 import type { SessionData, SessionTranscriptEntry, SessionAiMessage, SetupChatEntry } from '@/lib/session';
 
-// undefined = 아직 Firebase 응답 대기 중, null = 세션 없음, SessionData = 세션 있음
+// undefined = 코드 없음 또는 Firebase 응답 대기 중, null = Firebase가 "없음" 응답, SessionData = 세션 있음
 export function useSession(sessionCode: string | null): SessionData | null | undefined {
   const [state, setState] = useState<SessionData | null | undefined>(undefined);
 
   useEffect(() => {
     if (!sessionCode || !isFirebaseConfigured) {
-      setState(null);
+      setState(undefined); // null이 아닌 undefined — "아직 쿼리 안 함"과 구분
       return;
     }
 
