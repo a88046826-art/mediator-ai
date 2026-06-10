@@ -236,6 +236,7 @@ function useClovaVoice({ onResult, onInterim, onError }: Options) {
   const silenceTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chunkIntervalRef  = useRef<ReturnType<typeof setInterval> | null>(null);
   const isSendingRef      = useRef(false);
+  const hasSpeechRef      = useRef(false); // 실제 발화 감지 여부 — 소음만 있으면 전송 안 함
   const lastInterimRef    = useRef('');
 
   const setInterim = useCallback((text: string) => {
@@ -246,6 +247,13 @@ function useClovaVoice({ onResult, onInterim, onError }: Options) {
 
   const flush = useCallback(async () => {
     if (isSendingRef.current) return;
+    // 실제 발화가 없었으면 버퍼만 비우고 전송 안 함 (소음 hallucination 방지)
+    if (!hasSpeechRef.current) {
+      pcmChunksRef.current = [];
+      totalSamplesRef.current = 0;
+      return;
+    }
+    hasSpeechRef.current = false;
     const chunks = pcmChunksRef.current.splice(0);
     const total  = totalSamplesRef.current;
     totalSamplesRef.current = 0;
@@ -340,11 +348,12 @@ function useClovaVoice({ onResult, onInterim, onError }: Options) {
         const rms = Math.sqrt(rmsSum / tdData.length);
 
         if (rms > SILENCE_THRESHOLD) {
-          // 발화 중 — 침묵 타이머 리셋
+          // 발화 감지 — 실제 말소리 있음
+          hasSpeechRef.current = true;
           if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
           setInterim('🎙 말하는 중...');
-        } else if (totalSamplesRef.current > SAMPLE_RATE * (MIN_SPEECH_MS / 1000)) {
-          // 침묵 감지 — 빠르게 전송 (interval보다 빠름)
+        } else if (hasSpeechRef.current && totalSamplesRef.current > SAMPLE_RATE * (MIN_SPEECH_MS / 1000)) {
+          // 발화 후 침묵 감지 — 전송
           scheduleFlush();
         }
       };
@@ -354,16 +363,20 @@ function useClovaVoice({ onResult, onInterim, onError }: Options) {
       silence.gain.value = 0;
       src.connect(analyser); analyser.connect(processor); processor.connect(silence); silence.connect(ctx.destination);
 
-      pcmChunksRef.current = []; totalSamplesRef.current = 0;
+      pcmChunksRef.current = []; totalSamplesRef.current = 0; hasSpeechRef.current = false;
       isListeningRef.current = true;
       setIsListening(true);
 
       // 3초마다 자동 전송 — 녹음 중지 안 눌러도 실시간으로 텍스트 표시
       chunkIntervalRef.current = setInterval(() => {
-        if (isListeningRef.current && !isSendingRef.current &&
-            totalSamplesRef.current > SAMPLE_RATE * (MIN_SPEECH_MS / 1000)) {
+        if (!isListeningRef.current || isSendingRef.current) return;
+        if (hasSpeechRef.current && totalSamplesRef.current > SAMPLE_RATE * (MIN_SPEECH_MS / 1000)) {
           if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
           void flush();
+        } else if (!hasSpeechRef.current) {
+          // 발화 없이 소음만 쌓였으면 버퍼 버림
+          pcmChunksRef.current = [];
+          totalSamplesRef.current = 0;
         }
       }, CHUNK_INTERVAL_MS);
     } catch (err) {
