@@ -296,6 +296,7 @@ export default function AiPage() {
   const [isChatting, setIsChatting] = useState(false);
   const [unreadAiCount, setUnreadAiCount] = useState(0);
   const [flashAiPanel, setFlashAiPanel] = useState(false);
+  const [isSoundMuted, setIsSoundMuted] = useState(false);
   // snapshot saved when meeting ends (for summary)
   const summaryTranscriptRef = useRef<SessionTranscriptEntry[]>([]);
   const summaryAiMessagesRef = useRef<SessionAiMessage[]>([]);
@@ -562,7 +563,7 @@ export default function AiPage() {
     const aiOnlyCount = (sessionState?.aiMessages ?? []).filter((m) => m.role === 'ai').length;
     if (prevAiLengthRef.current > 0 && aiOnlyCount > prevAiLengthRef.current) {
       const newMsgs = aiOnlyCount - prevAiLengthRef.current;
-      playDing();
+      if (!isSoundMuted) playDing();
       try { navigator.vibrate?.(200); } catch { /* ignore */ }
       setFlashAiPanel(true);
       setTimeout(() => setFlashAiPanel(false), 1200);
@@ -1215,16 +1216,35 @@ export default function AiPage() {
             <span className="hidden sm:inline text-xs text-slate-500 ml-2">{teamSummary}</span>
           )}
         </div>
-        {isAnalyzing && (
-          <div className="flex items-center gap-1.5 text-xs text-accent">
-            <div className="flex gap-0.5">
-              {[0,1,2].map((i) => (
-                <div key={i} className="w-1 h-1 rounded-full bg-accent animate-pulse" style={{ animationDelay: `${i*0.15}s` }} />
-              ))}
+        <div className="flex items-center gap-2">
+          {isAnalyzing && (
+            <div className="flex items-center gap-1.5 text-xs text-accent">
+              <div className="flex gap-0.5">
+                {[0,1,2].map((i) => (
+                  <div key={i} className="w-1 h-1 rounded-full bg-accent animate-pulse" style={{ animationDelay: `${i*0.15}s` }} />
+                ))}
+              </div>
+              AI 분석 중
             </div>
-            AI 분석 중
-          </div>
-        )}
+          )}
+          <button
+            onClick={() => setIsSoundMuted((v) => !v)}
+            title={isSoundMuted ? '소리 켜기' : '소리 끄기'}
+            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors"
+          >
+            {isSoundMuted ? (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707A1 1 0 0112 5v14a1 1 0 01-1.707.707L5.586 15z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072M12 6v12m0 0l-4.243-4.243M12 18l4.243-4.243M12 6L7.757 10.243M12 6l4.243 4.243" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707A1 1 0 0112 5v14a1 1 0 01-1.707.707L5.586 15z" />
+              </svg>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* mobile tab bar */}
