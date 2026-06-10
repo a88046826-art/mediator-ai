@@ -192,7 +192,7 @@ function useWebSpeechVoice({ onResult, onInterim, onError }: Options) {
 
 const SAMPLE_RATE        = 16000;
 const CHUNK_INTERVAL_MS  = 5000;
-const SILENCE_THRESHOLD  = 20;
+const SILENCE_THRESHOLD  = 8;   // 멀리서 말해도 감지 (float32 RMS * 127 기준)
 const SILENCE_MS         = 800;  // 문장 중간 절단 방지
 const MIN_SPEECH_MS      = 200;
 
