@@ -1365,6 +1365,29 @@ export default function AiPage() {
                   </svg>
                 </button>
               </div>
+              {/* Share URL */}
+              <div>
+                <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1.5">초대 링크</p>
+                <button
+                  onClick={() => {
+                    const url = `${window.location.origin}/ai`;
+                    const text = `방 코드: ${sessionCode}\n${url}`;
+                    navigator.clipboard.writeText(text);
+                    showToast('초대 링크 복사됨', 'success');
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-white/4 border border-border hover:border-accent/30 hover:bg-accent/5 transition-colors group text-left"
+                >
+                  <svg className="w-3.5 h-3.5 text-slate-500 group-hover:text-accent shrink-0 transition-colors" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                  <span className="text-[11px] text-slate-400 group-hover:text-slate-300 truncate flex-1 transition-colors font-mono">
+                    {typeof window !== 'undefined' ? window.location.host : ''}/ai
+                  </span>
+                  <svg className="w-3.5 h-3.5 text-slate-600 group-hover:text-accent shrink-0 transition-colors" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                  </svg>
+                </button>
+              </div>
               <div>
                 <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-2">참가자 {sessionMembers.length}명</p>
                 <div className="space-y-2">
