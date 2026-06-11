@@ -1424,7 +1424,7 @@ export default function AiPage() {
         )}
 
         {activeTab !== 'overview' && (
-          <div className={`flex-col overflow-hidden sm:flex sm:flex-1 sm:border-r sm:border-border ${activeTab === 'transcript' ? 'flex flex-1' : 'hidden'}`}>
+          <div className={`flex-col overflow-hidden min-h-0 sm:flex sm:flex-1 sm:border-r sm:border-border ${activeTab === 'transcript' ? 'flex flex-1' : 'hidden'}`}>
             <div className="shrink-0 px-4 pt-3 pb-2 border-b border-border/40">
               <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">대화 기록</p>
             </div>
@@ -1433,7 +1433,7 @@ export default function AiPage() {
         )}
 
         {activeTab !== 'overview' && (
-          <div className={`flex-col overflow-hidden sm:flex sm:flex-1 ${activeTab === 'ai' ? 'flex flex-1' : 'hidden'}`}>
+          <div className={`flex-col overflow-hidden min-h-0 sm:flex sm:flex-1 ${activeTab === 'ai' ? 'flex flex-1' : 'hidden'}`}>
             <div className={`shrink-0 px-4 pt-3 pb-2 border-b border-border/40 transition-colors duration-500 ${flashAiPanel ? 'bg-violet-500/8' : ''}`}>
               <p className={`text-[10px] font-mono uppercase tracking-widest transition-colors duration-300 ${flashAiPanel ? 'text-violet-400' : 'text-slate-500'}`}>
                 AI 중재{flashAiPanel ? ' ●' : ''}

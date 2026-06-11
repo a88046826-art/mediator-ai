@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import type { Message } from '@/types';
 
 interface Props {
@@ -27,13 +27,29 @@ function formatTime(ts: string | undefined): string {
 
 export function ChatWindow({ messages, isLoading }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isAtBottomRef = useRef(true);
+
+  const handleScroll = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // 사용자가 이미 맨 아래에 있을 때만 자동 스크롤 (위로 읽는 중이면 고정)
+    if (isAtBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages, isLoading]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+    <div
+      ref={containerRef}
+      onScroll={handleScroll}
+      className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
+      style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+    >
       {messages.map((msg) => {
         const timeLabel = formatTime(msg.timestamp);
         return (
