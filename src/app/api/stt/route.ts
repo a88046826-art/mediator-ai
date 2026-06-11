@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const CLOVA_SPEECH_URL = 'https://clovaspeech-gw.ncloud.com/recog/v1/stt?lang=Kor&format=WAV';
+const CLOVA_SPEECH_URL = 'https://clovaspeech-gw.ncloud.com/recog/v1/stt?lang=Kor&format=wav';
 const CLOVA_CSR_URL    = 'https://naveropenapi.apigw.ntruss.com/recog/v1/stt?lang=Kor';
 const MAX_BYTES = 10 * 1024 * 1024;
 

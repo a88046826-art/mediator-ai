@@ -194,8 +194,7 @@ const SAMPLE_RATE        = 16000;
 const CHUNK_INTERVAL_MS  = 5000;
 const SILENCE_THRESHOLD  = 8;
 const SILENCE_MS         = 800;
-const MIN_SPEECH_MS      = 500;  // 200ms → 500ms: 너무 짧은 조각 제거
-const OVERLAP_SAMPLES    = SAMPLE_RATE * 0.5; // 이전 청크 마지막 500ms overlap
+const MIN_SPEECH_MS      = 500;
 
 // 디바이스 실제 샘플레이트 → 16000Hz 다운샘플 (선형 보간)
 function resampleTo16k(input: Float32Array, fromRate: number): Int16Array {
@@ -229,15 +228,6 @@ function normalize(samples: Int16Array): Int16Array {
   return out;
 }
 
-// pre-emphasis: 고주파(자음) 강조 — y[n] = x[n] - 0.97 * x[n-1]
-function preEmphasis(samples: Int16Array): Int16Array {
-  const out = new Int16Array(samples.length);
-  out[0] = samples[0];
-  for (let i = 1; i < samples.length; i++) {
-    out[i] = Math.max(-32768, Math.min(32767, Math.round(samples[i] - 0.97 * samples[i - 1])));
-  }
-  return out;
-}
 
 function encodeWAV(samples: Int16Array, sampleRate: number): ArrayBuffer {
   const dataLen = samples.length * 2;
@@ -281,7 +271,6 @@ function useClovaVoice({ onResult, onInterim, onError }: Options) {
   const chunkIntervalRef  = useRef<ReturnType<typeof setInterval> | null>(null);
   const isSendingRef      = useRef(false);
   const hasSpeechRef      = useRef(false);
-  const overlapRef        = useRef<Int16Array | null>(null); // 이전 청크 마지막 500ms
   const lastInterimRef    = useRef('');
 
   const setInterim = useCallback((text: string) => {
@@ -310,19 +299,11 @@ function useClovaVoice({ onResult, onInterim, onError }: Options) {
     totalSamplesRef.current = 0;
     if (total < SAMPLE_RATE * (MIN_SPEECH_MS / 1000)) return;
 
-    // 이전 청크 overlap 붙이기 (청크 경계 단어 보완)
-    const prev = overlapRef.current;
-    const payloadLen = (prev ? prev.length : 0) + total;
-    const combined = new Int16Array(payloadLen);
+    const combined = new Int16Array(total);
     let off = 0;
-    if (prev) { combined.set(prev, 0); off = prev.length; }
     for (const c of chunks) { combined.set(c, off); off += c.length; }
 
-    // 다음 청크를 위해 마지막 500ms 보존
-    overlapRef.current = combined.slice(Math.max(0, combined.length - OVERLAP_SAMPLES));
-
-    // 정규화 + pre-emphasis 적용
-    const processed = preEmphasis(normalize(combined));
+    const processed = normalize(combined);
 
     isSendingRef.current = true;
     setInterim('인식 중...');
@@ -422,7 +403,7 @@ function useClovaVoice({ onResult, onInterim, onError }: Options) {
       silence.gain.value = 0;
       src.connect(analyser); analyser.connect(processor); processor.connect(silence); silence.connect(ctx.destination);
 
-      pcmChunksRef.current = []; totalSamplesRef.current = 0; hasSpeechRef.current = false; overlapRef.current = null;
+      pcmChunksRef.current = []; totalSamplesRef.current = 0; hasSpeechRef.current = false;
       isListeningRef.current = true;
       setIsListening(true);
 
