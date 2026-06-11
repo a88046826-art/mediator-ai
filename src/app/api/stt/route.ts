@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
       form.append('file', new Blob([audio], { type: 'audio/wav' }), 'audio.wav');
       form.append('model', 'whisper-1');
       form.append('language', 'ko');
+      form.append('prompt', '스타트업 팀 회의. 기획, 개발, 디자인, 마케팅, 투자, 일정, 피드백.');
 
       const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
