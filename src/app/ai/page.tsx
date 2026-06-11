@@ -22,7 +22,7 @@ import {
 } from '@/lib/session';
 
 type Phase = 'createOrJoin' | 'lobby' | 'meeting' | 'summary';
-type ActiveTab = 'transcript' | 'ai';
+type ActiveTab = 'transcript' | 'ai' | 'overview';
 type SummaryView = null | 'analysis' | 'next-topic' | 'action-items';
 type ApiMessage = { role: 'user' | 'ai'; content: string };
 
@@ -297,6 +297,8 @@ export default function AiPage() {
   const [unreadAiCount, setUnreadAiCount] = useState(0);
   const [flashAiPanel, setFlashAiPanel] = useState(false);
   const [isSoundMuted, setIsSoundMuted] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const meetingStartTimeRef = useRef(0);
   // snapshot saved when meeting ends (for summary)
   const summaryTranscriptRef = useRef<SessionTranscriptEntry[]>([]);
   const summaryAiMessagesRef = useRef<SessionAiMessage[]>([]);
@@ -391,6 +393,7 @@ export default function AiPage() {
     if (sessionState.status === 'lobby') {
       setPhase('lobby');
     } else if (sessionState.status === 'meeting') {
+      meetingStartTimeRef.current = Date.now();
       // 이미 진행된 항목들 재분석 방지
       lastAnalyzedCountRef.current = sessionState.transcript.length;
       lastUrgentEntryIdRef.current = sessionState.transcript[sessionState.transcript.length - 1]?.id ?? '';
@@ -409,6 +412,7 @@ export default function AiPage() {
   useEffect(() => {
     if (!sessionState) return;
     if (sessionState.status === 'meeting' && phase === 'lobby') {
+      meetingStartTimeRef.current = Date.now();
       setPhase('meeting');
       setActiveTab('transcript');
       setUnreadAiCount(0);
@@ -575,6 +579,16 @@ export default function AiPage() {
     prevAiLengthRef.current = aiOnlyCount;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionState?.aiMessages?.length, phase]);
+
+  // 진행 시간 타이머
+  useEffect(() => {
+    if (phase !== 'meeting') { setElapsed(0); return; }
+    if (!meetingStartTimeRef.current) meetingStartTimeRef.current = Date.now();
+    const id = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - meetingStartTimeRef.current) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [phase]);
 
   const handleChatSend = useCallback(async () => {
     const text = chatInput.trim();
@@ -1228,6 +1242,14 @@ export default function AiPage() {
             </div>
           )}
           <button
+            onClick={() => setActiveTab((t) => t === 'overview' ? 'transcript' : 'overview')}
+            className={`hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+              activeTab === 'overview' ? 'bg-accent/20 text-accent' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+            }`}
+          >
+            오버뷰
+          </button>
+          <button
             onClick={() => setIsSoundMuted((v) => !v)}
             title={isSoundMuted ? '소리 켜기' : '소리 끄기'}
             className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors"
@@ -1273,44 +1295,124 @@ export default function AiPage() {
           {activeTab === 'ai' && unreadAiCount === 0 && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />}
           {unreadAiCount > 0 && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-violet-500 animate-pulse" />}
         </button>
+        <button
+          onClick={() => setActiveTab('overview')}
+          className={`flex-1 py-2 text-xs font-medium transition-colors relative ${activeTab === 'overview' ? 'text-accent' : 'text-slate-500'}`}
+        >
+          오버뷰
+          {activeTab === 'overview' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />}
+        </button>
       </div>
 
       {/* two-panel */}
       <div className="flex-1 min-h-0 flex overflow-hidden">
-        <div className={`flex-col overflow-hidden sm:flex sm:flex-1 sm:border-r sm:border-border ${activeTab === 'transcript' ? 'flex flex-1' : 'hidden'}`}>
-          <div className="shrink-0 px-4 pt-3 pb-2 border-b border-border/40">
-            <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">대화 기록</p>
-          </div>
-          <LiveTranscript entries={displayTranscript} interimText={interimText} />
-        </div>
 
-        <div className={`flex-col overflow-hidden sm:flex sm:flex-1 ${activeTab === 'ai' ? 'flex flex-1' : 'hidden'}`}>
-          <div className={`shrink-0 px-4 pt-3 pb-2 border-b border-border/40 transition-colors duration-500 ${flashAiPanel ? 'bg-violet-500/8' : ''}`}>
-            <p className={`text-[10px] font-mono uppercase tracking-widest transition-colors duration-300 ${flashAiPanel ? 'text-violet-400' : 'text-slate-500'}`}>
-              AI 중재{flashAiPanel ? ' ●' : ''}
-            </p>
+        {/* Overview panel */}
+        {activeTab === 'overview' && (
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {/* Duration */}
+            <div className="card text-center py-5">
+              <p className="text-4xl font-mono font-bold text-slate-100 tabular-nums">
+                {String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')}
+              </p>
+              <p className="text-xs text-slate-500 mt-1">진행 시간</p>
+            </div>
+
+            {/* Topic */}
+            {meetingContextRef.current && (
+              <div className="card">
+                <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1.5">회의 주제</p>
+                <p className="text-sm text-slate-200 leading-relaxed">{meetingContextRef.current}</p>
+              </div>
+            )}
+
+            {/* Room + members */}
+            <div className="card space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">방 코드</p>
+                <button
+                  onClick={() => { navigator.clipboard.writeText(sessionCode ?? ''); showToast('방 코드 복사됨', 'success'); }}
+                  className="flex items-center gap-2 group"
+                >
+                  <span className="font-mono font-bold text-accent tracking-widest text-sm">{sessionCode}</span>
+                  <svg className="w-3.5 h-3.5 text-slate-600 group-hover:text-accent transition-colors" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                  </svg>
+                </button>
+              </div>
+              <div>
+                <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-2">참가자 {sessionMembers.length}명</p>
+                <div className="space-y-2">
+                  {sessionMembers.map((m) => (
+                    <div key={m.id} className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-full bg-accent/10 text-accent flex items-center justify-center text-xs font-bold shrink-0">
+                        {m.name[0]?.toUpperCase()}
+                      </div>
+                      <span className="text-sm text-slate-200 flex-1">{m.name}</span>
+                      {sessionState?.host === m.id && (
+                        <span className="text-[10px] text-accent/60 font-mono">호스트</span>
+                      )}
+                      {m.id === deviceIdRef.current && (
+                        <span className="text-[10px] text-slate-600 font-mono">나</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Stats */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="card text-center py-4">
+                <p className="text-3xl font-bold text-slate-100 tabular-nums">{firebaseTranscript.length}</p>
+                <p className="text-xs text-slate-500 mt-1">발화 수</p>
+              </div>
+              <div className="card text-center py-4">
+                <p className="text-3xl font-bold text-slate-100 tabular-nums">{Math.max(0, firebaseAiMessages.filter((m) => m.role === 'ai').length - 1)}</p>
+                <p className="text-xs text-slate-500 mt-1">AI 개입</p>
+              </div>
+            </div>
           </div>
-          <ChatWindow messages={displayMessages} isLoading={isChatting} />
-          <div className="shrink-0 border-t border-border/40 px-3 py-2.5 flex gap-2 items-center bg-surface">
-            <input
-              ref={chatInputRef}
-              type="text"
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChatSend(); } }}
-              placeholder="중재자에게 질문 또는 맥락 전달..."
-              className="input-base flex-1 text-sm py-2"
-              disabled={isChatting}
-            />
-            <button
-              onClick={handleChatSend}
-              disabled={isChatting || !chatInput.trim()}
-              className="shrink-0 px-3 py-2 rounded-lg bg-accent/20 text-accent text-sm font-medium hover:bg-accent/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              전송
-            </button>
+        )}
+
+        {activeTab !== 'overview' && (
+          <div className={`flex-col overflow-hidden sm:flex sm:flex-1 sm:border-r sm:border-border ${activeTab === 'transcript' ? 'flex flex-1' : 'hidden'}`}>
+            <div className="shrink-0 px-4 pt-3 pb-2 border-b border-border/40">
+              <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">대화 기록</p>
+            </div>
+            <LiveTranscript entries={displayTranscript} interimText={interimText} />
           </div>
-        </div>
+        )}
+
+        {activeTab !== 'overview' && (
+          <div className={`flex-col overflow-hidden sm:flex sm:flex-1 ${activeTab === 'ai' ? 'flex flex-1' : 'hidden'}`}>
+            <div className={`shrink-0 px-4 pt-3 pb-2 border-b border-border/40 transition-colors duration-500 ${flashAiPanel ? 'bg-violet-500/8' : ''}`}>
+              <p className={`text-[10px] font-mono uppercase tracking-widest transition-colors duration-300 ${flashAiPanel ? 'text-violet-400' : 'text-slate-500'}`}>
+                AI 중재{flashAiPanel ? ' ●' : ''}
+              </p>
+            </div>
+            <ChatWindow messages={displayMessages} isLoading={isChatting} />
+            <div className="shrink-0 border-t border-border/40 px-3 py-2.5 flex gap-2 items-center bg-surface">
+              <input
+                ref={chatInputRef}
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChatSend(); } }}
+                placeholder="중재자에게 질문 또는 맥락 전달..."
+                className="input-base flex-1 text-sm py-2"
+                disabled={isChatting}
+              />
+              <button
+                onClick={handleChatSend}
+                disabled={isChatting || !chatInput.trim()}
+                className="shrink-0 px-3 py-2 rounded-lg bg-accent/20 text-accent text-sm font-medium hover:bg-accent/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                전송
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <MeetingControls
