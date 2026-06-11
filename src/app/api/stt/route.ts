@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const CLOVA_SPEECH_URL = 'https://clovaspeech-gw.ncloud.com/recog/v1/stt?lang=Kor&format=wav';
-const CLOVA_CSR_URL    = 'https://naveropenapi.apigw.ntruss.com/recog/v1/stt?lang=Kor';
 const MAX_BYTES = 10 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
+  const openaiKey    = process.env.OPENAI_API_KEY;
   const speechSecret = process.env.CLOVA_SPEECH_SECRET;
   const csrId        = process.env.CLOVA_CLIENT_ID;
   const csrSecret    = process.env.CLOVA_CLIENT_SECRET;
 
-  if (!speechSecret && (!csrId || !csrSecret)) {
+  if (!openaiKey && !speechSecret && (!csrId || !csrSecret)) {
     return NextResponse.json({ error: 'STT not configured' }, { status: 500 });
   }
 
@@ -20,14 +19,31 @@ export async function POST(req: NextRequest) {
 
   try {
     const audio = await req.arrayBuffer();
-    if (audio.byteLength < 44) {
-      return NextResponse.json({ text: '' });
+    if (audio.byteLength < 44) return NextResponse.json({ text: '' });
+
+    // 1순위: OpenAI Whisper
+    if (openaiKey) {
+      const form = new FormData();
+      form.append('file', new Blob([audio], { type: 'audio/wav' }), 'audio.wav');
+      form.append('model', 'whisper-1');
+      form.append('language', 'ko');
+
+      const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${openaiKey}` },
+        body: form,
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`Whisper ${res.status}: ${body}`);
+      }
+      const data = await res.json() as { text?: string };
+      return NextResponse.json({ text: data.text ?? '' });
     }
 
-    // CLOVA Speech (장문/스트리밍 도메인) 우선, 없으면 CSR 폴백
-    let res: Response;
+    // 2순위: CLOVA Speech
     if (speechSecret) {
-      res = await fetch(CLOVA_SPEECH_URL, {
+      const res = await fetch('https://clovaspeech-gw.ncloud.com/recog/v1/stt?lang=Kor&format=wav', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/octet-stream',
@@ -35,25 +51,25 @@ export async function POST(req: NextRequest) {
         },
         body: audio,
       });
-    } else {
-      res = await fetch(CLOVA_CSR_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/octet-stream',
-          'X-NCP-APIGW-API-KEY-ID': csrId!,
-          'X-NCP-APIGW-API-KEY': csrSecret!,
-        },
-        body: audio,
-      });
+      if (!res.ok) throw new Error(`CLOVA ${res.status}`);
+      const data = await res.json() as { text?: string };
+      return NextResponse.json({ text: data.text ?? '' });
     }
 
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new Error(`STT ${res.status}: ${body}`);
-    }
-
+    // 3순위: CSR
+    const res = await fetch('https://naveropenapi.apigw.ntruss.com/recog/v1/stt?lang=Kor', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'X-NCP-APIGW-API-KEY-ID': csrId!,
+        'X-NCP-APIGW-API-KEY': csrSecret!,
+      },
+      body: audio,
+    });
+    if (!res.ok) throw new Error(`CSR ${res.status}`);
     const data = await res.json() as { text?: string };
     return NextResponse.json({ text: data.text ?? '' });
+
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'STT error';
     return NextResponse.json({ error: msg }, { status: 500 });
