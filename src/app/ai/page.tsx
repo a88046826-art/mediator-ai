@@ -553,6 +553,10 @@ export default function AiPage() {
       if (err.includes('권한')) setMicBlocked(true);
       else showToast(`음성 오류: ${err}`, 'error');
     },
+    meetingTopic: sessionState?.topic,
+    meetingSpeakers: sessionState
+      ? Object.values(sessionState.members).map((m) => m.name).join(', ')
+      : undefined,
   });
   stopRef.current = stop;
 

@@ -6,6 +6,8 @@ interface Options {
   onResult: (text: string) => void;
   onInterim?: (text: string) => void;
   onError?: (err: string) => void;
+  meetingTopic?: string;
+  meetingSpeakers?: string;
 }
 
 // ── Web Speech API 구현 ────────────────────────────────────────────────────────
@@ -245,7 +247,7 @@ function encodeWAV(samples: Int16Array, sampleRate: number): ArrayBuffer {
   return buf;
 }
 
-function useClovaVoice({ onResult, onInterim, onError }: Options) {
+function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpeakers }: Options) {
   const [isListening, setIsListening] = useState(false);
   const [isSupported] = useState(
     () => typeof window !== 'undefined' && !!navigator.mediaDevices?.getUserMedia,
@@ -308,7 +310,11 @@ function useClovaVoice({ onResult, onInterim, onError }: Options) {
     isSendingRef.current = true;
     setInterim('인식 중...');
     try {
-      const res = await fetch('/api/stt', {
+      const params = new URLSearchParams();
+      if (meetingTopic)    params.set('topic',    meetingTopic);
+      if (meetingSpeakers) params.set('speakers', meetingSpeakers);
+      const url = params.toString() ? `/api/stt?${params}` : '/api/stt';
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'audio/wav' },
         body: encodeWAV(processed, SAMPLE_RATE),

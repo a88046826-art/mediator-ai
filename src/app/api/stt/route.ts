@@ -23,11 +23,17 @@ export async function POST(req: NextRequest) {
 
     // 1순위: OpenAI Whisper
     if (openaiKey) {
+      const topic    = req.nextUrl.searchParams.get('topic') ?? '';
+      const speakers = req.nextUrl.searchParams.get('speakers') ?? '';
+      const promptParts = ['스타트업 팀 회의. 기획, 개발, 디자인, 마케팅, 투자, 일정, 피드백.'];
+      if (topic)    promptParts.push(`회의 주제: ${topic}.`);
+      if (speakers) promptParts.push(`참가자: ${speakers}.`);
+
       const form = new FormData();
       form.append('file', new Blob([audio], { type: 'audio/wav' }), 'audio.wav');
       form.append('model', 'whisper-1');
       form.append('language', 'ko');
-      form.append('prompt', '스타트업 팀 회의. 기획, 개발, 디자인, 마케팅, 투자, 일정, 피드백.');
+      form.append('prompt', promptParts.join(' '));
 
       const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
