@@ -8,11 +8,21 @@ interface Props {
   isLoading: boolean;
 }
 
-function interventionStyle(content: string): string {
-  if (content.startsWith('⚡')) return 'bg-orange-500/10 border border-orange-500/40 text-slate-200';
-  if (content.startsWith('📌')) return 'bg-blue-500/10 border border-blue-500/40 text-slate-200';
-  if (content.startsWith('✅')) return 'bg-emerald-500/10 border border-emerald-500/40 text-slate-200';
+function aiBubbleStyle(content: string, isAlert: boolean): string {
+  if (isAlert || content.startsWith('⚡'))
+    return 'bg-orange-500/10 border border-orange-500/40 text-orange-100';
+  if (content.startsWith('📌'))
+    return 'bg-blue-500/10 border border-blue-500/40 text-slate-200';
+  if (content.startsWith('✅'))
+    return 'bg-emerald-500/10 border border-emerald-500/40 text-slate-200';
   return 'bg-surface2 border border-border text-slate-200';
+}
+
+function formatTime(ts: string | undefined): string {
+  if (!ts) return '';
+  const d = new Date(isNaN(Number(ts)) ? ts : Number(ts));
+  if (isNaN(d.getTime())) return '';
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 export function ChatWindow({ messages, isLoading }: Props) {
@@ -23,30 +33,38 @@ export function ChatWindow({ messages, isLoading }: Props) {
   }, [messages, isLoading]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-      {messages.map((msg) => (
-        <div
-          key={msg.id}
-          className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fadeIn`}
-        >
-          {msg.role === 'ai' && (
-            <div className="w-7 h-7 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center text-xs mr-2 shrink-0 mt-1">
-              🤖
-            </div>
-          )}
+    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      {messages.map((msg) => {
+        const timeLabel = formatTime(msg.timestamp);
+        return (
           <div
-            className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
-              msg.role === 'user'
-                ? 'bg-accent text-white rounded-tr-sm'
-                : msg.isAlert
-                ? 'bg-red-500/15 border border-red-500/30 text-red-300 rounded-tl-sm'
-                : `${interventionStyle(msg.content)} rounded-tl-sm`
-            }`}
+            key={msg.id}
+            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fadeIn group`}
           >
-            {msg.content}
+            {msg.role === 'ai' && (
+              <div className="w-7 h-7 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center text-xs mr-2 shrink-0 mt-1">
+                🤖
+              </div>
+            )}
+            <div className="flex flex-col gap-0.5 max-w-[85%]">
+              <div
+                className={`rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
+                  msg.role === 'user'
+                    ? 'bg-accent text-white rounded-tr-sm'
+                    : `${aiBubbleStyle(msg.content, !!msg.isAlert)} rounded-tl-sm`
+                }`}
+              >
+                {msg.content}
+              </div>
+              {timeLabel && (
+                <span className={`text-[10px] text-slate-700 opacity-0 group-hover:opacity-100 transition-opacity duration-150 px-1 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
+                  {timeLabel}
+                </span>
+              )}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {isLoading && (
         <div className="flex justify-start animate-fadeIn">
