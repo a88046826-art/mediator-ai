@@ -73,37 +73,48 @@ function buildSystemPrompt(context: string, teamSummary: string): string {
 - 2-4문장으로 간결하게. 한국어.`;
 }
 
-function buildAutoPrompt(teamSummary: string, context: string, transcriptText: string): string {
-  return `당신은 실시간 회의를 조용히 모니터링하는 중재자입니다.
+function buildAutoPrompt(teamSummary: string, context: string, transcriptText: string, recentAiContent: string): string {
+  return `당신은 팀 회의를 조용히 지켜보는 AI 중재자입니다. 개입은 최소화하고 정말 필요할 때만 말하세요.
 
 팀 구성: ${teamSummary || '없음'}
 회의 주제: ${context || '없음'}
-
-대화 내용:
+${recentAiContent ? `\n[이미 한 말 — 반복 금지]\n${recentAiContent}\n` : ''}
+=== 대화 내용 ===
 ${transcriptText}
 
-개입 기준 — 아래 상황에서만 말하세요. 웬만하면 SKIP:
-- 감정적 충돌이나 공격적 언어가 명확히 보일 때
-- 대화가 완전히 다른 방향으로 흘러 회의가 무의미해질 때
-- 중요한 결정이 내려지는데 반대 의견이 묻히고 있을 때
-- 에너지가 눈에 띄게 떨어지거나 아무도 말을 안 할 때
+━━ 개입 기준 ━━
+아래 상황이 아니면 반드시 "SKIP"만 반환.
 
-위 상황이 아니면 반드시 "SKIP"만 반환.
+즉시 개입:
+• 공격적·모욕적 언어나 인신공격이 명확히 보일 때
+• 한 사람이 반복적으로 무시당하거나 발언이 계속 끊길 때
 
-개입할 때:
-- 자연스럽고 따뜻한 말투로, 3문장 이내
-- 구체적인 다음 행동 하나만 제안
+부드럽게 개입:
+• 주제와 무관한 대화가 길게 이어져 회의 목적이 흐려질 때
+• 중요한 결정이 반대 의견 없이 너무 빠르게 넘어갈 때
+• 에너지가 뚜렷하게 떨어지거나 대화가 막힐 때
+
+━━ 개입 방식 ━━
+• 2-3문장 이내, 따뜻하고 중립적인 어조
+• 구체적인 다음 행동 하나만 제안
+• 누가 말했는지 언급 금지, 이미 한 말 반복 금지
 한국어.`;
 }
 
 function buildUrgentCheckPrompt(recentLines: string): string {
-  return `당신은 회의 중재자입니다. 아래 발언에 욕설·인신공격·심한 감정 폭발이 있는지 판단하세요.
+  return `아래 발언에서 즉각 개입이 필요한 상황인지 판단하세요.
 
 ${recentLines}
 
-판단 기준: 명백한 욕설, 인신공격, 심한 감정 폭발만 해당입니다.
-- 해당 없으면: SKIP
-- 해당 있으면: ⚡로 시작하는 즉각 중재 1-2문장 (차분하고 따뜻하게 분위기 완화)
+개입 필요 (이것만):
+• 명백한 욕설 또는 인신공격
+• 위협적이거나 심하게 모욕적인 발언
+• 극도로 감정적인 폭발로 대화가 불가능한 수준
+
+일반적인 의견 충돌, 강한 어조, 언성 높임 → SKIP
+
+해당 없으면: SKIP
+해당 있으면: ⚡로 시작하는 중재 1-2문장 (매우 차분하게, 양쪽 모두 존중)
 한국어.`;
 }
 
@@ -321,8 +332,8 @@ export default function AiPage() {
   const activeTabRef = useRef<ActiveTab>('transcript');
   activeTabRef.current = activeTab;
 
-  const MAX_SESSION_CALLS = 30;
-  const MAX_URGENT_CALLS = 50;
+  const MAX_SESSION_CALLS = 60;
+  const MAX_URGENT_CALLS = 80;
 
   // localStorage 헬퍼
   const saveSession = (code: string, name: string) => {
@@ -444,9 +455,13 @@ export default function AiPage() {
       runUrgentCheck(entries);
     }
 
-    // Regular analysis every 3 entries
-    const recentText = entries.slice(-3).map((e) => e.text).join(' ');
-    if (entries.length - lastAnalyzedCountRef.current >= 3 && recentText.length >= 20) {
+    // 글자 수 기반 트리거: "네" "응" 같은 짧은 답변 3개론 트리거 안 됨
+    const newEntries = entries.slice(lastAnalyzedCountRef.current);
+    const newCharCount = newEntries.reduce((sum, e) => sum + e.text.length, 0);
+    const shouldAnalyze =
+      (newEntries.length >= 2 && newCharCount >= 40) || // 의미있는 내용 2개 이상
+      newEntries.length >= 6;                           // 짧더라도 6개 쌓이면 분석
+    if (shouldAnalyze) {
       lastAnalyzedCountRef.current = entries.length;
       runAnalysis(entries);
     }
@@ -463,8 +478,14 @@ export default function AiPage() {
       const transcriptText = entries
         .map((e) => `[${e.time}] ${e.speaker ? `${e.speaker}: ` : ''}${e.text}`)
         .join('\n');
+      // 직전 AI 개입 3개 전달 — 같은 말 반복 방지
+      const recentAiContent = (sessionState?.aiMessages ?? [])
+        .filter((m) => m.role === 'ai')
+        .slice(-3)
+        .map((m) => `• ${m.content.slice(0, 80)}${m.content.length > 80 ? '…' : ''}`)
+        .join('\n');
       const result = await callApi(
-        buildAutoPrompt(teamSummaryRef.current, meetingContextRef.current, transcriptText),
+        buildAutoPrompt(teamSummaryRef.current, meetingContextRef.current, transcriptText, recentAiContent),
         '위 대화를 분석해주세요.',
         512,
       );

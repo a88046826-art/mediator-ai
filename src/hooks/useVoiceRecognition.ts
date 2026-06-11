@@ -194,9 +194,13 @@ function useWebSpeechVoice({ onResult, onInterim, onError }: Options) {
 
 const SAMPLE_RATE        = 16000;
 const CHUNK_INTERVAL_MS  = 5000;
-const SILENCE_THRESHOLD  = 8;
-const SILENCE_MS         = 800;
-const MIN_SPEECH_MS      = 500;
+const SILENCE_MS         = 1200;   // 800→1200: 문장 중간 끊김 방지
+const MIN_SPEECH_MS      = 300;    // 500→300: "네","아니요" 등 짧은 답변 캡처
+const NOISE_FLOOR_INIT   = 6;      // 초기 노이즈 플로어
+const NOISE_ADAPT_RATE   = 0.015;  // 환경 적응 속도
+const SPEECH_RATIO       = 3.5;    // 노이즈 플로어의 몇 배여야 말소리로 판단
+const NOISE_FLOOR_MIN    = 3;
+const NOISE_FLOOR_MAX    = 18;
 
 // 디바이스 실제 샘플레이트 → 16000Hz 다운샘플 (선형 보간)
 function resampleTo16k(input: Float32Array, fromRate: number): Int16Array {
@@ -273,6 +277,8 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
   const chunkIntervalRef  = useRef<ReturnType<typeof setInterval> | null>(null);
   const isSendingRef      = useRef(false);
   const hasSpeechRef      = useRef(false);
+  const noiseFloorRef     = useRef(NOISE_FLOOR_INIT); // 환경 적응형 노이즈 플로어
+  const warmupFramesRef   = useRef(0);               // 초기 캘리브레이션 프레임 수
   const lastInterimRef    = useRef('');
 
   const setInterim = useCallback((text: string) => {
@@ -388,19 +394,37 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
         pcmChunksRef.current.push(pcm);
         totalSamplesRef.current += pcm.length;
 
-        // RMS를 analyser 대신 input buffer 전체로 계산 (더 정확한 발화 감지)
+        // RMS 계산
         let rmsSum = 0;
         for (let i = 0; i < input.length; i++) rmsSum += input[i] * input[i];
         const rms = Math.sqrt(rmsSum / input.length) * 127;
 
-        if (rms > SILENCE_THRESHOLD) {
-          // 발화 감지 — 실제 말소리 있음
+        warmupFramesRef.current++;
+
+        // 처음 25프레임(~6초)은 노이즈 플로어 캘리브레이션만 수행
+        if (warmupFramesRef.current <= 25) {
+          noiseFloorRef.current = noiseFloorRef.current * (1 - NOISE_ADAPT_RATE) + rms * NOISE_ADAPT_RATE;
+          noiseFloorRef.current = Math.max(NOISE_FLOOR_MIN, Math.min(NOISE_FLOOR_MAX, noiseFloorRef.current));
+          return;
+        }
+
+        // 적응형 임계값: 노이즈 플로어의 SPEECH_RATIO 배
+        const speechThreshold = Math.max(NOISE_FLOOR_MIN * SPEECH_RATIO, noiseFloorRef.current * SPEECH_RATIO);
+
+        if (rms > speechThreshold) {
+          // 발화 감지
           hasSpeechRef.current = true;
           if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
           setInterim('🎙 말하는 중...');
-        } else if (hasSpeechRef.current && totalSamplesRef.current > SAMPLE_RATE * (MIN_SPEECH_MS / 1000)) {
-          // 발화 후 침묵 감지 — 전송
-          scheduleFlush();
+        } else {
+          // 침묵 — 노이즈 플로어 서서히 적응
+          if (!hasSpeechRef.current) {
+            noiseFloorRef.current = noiseFloorRef.current * (1 - NOISE_ADAPT_RATE) + rms * NOISE_ADAPT_RATE;
+            noiseFloorRef.current = Math.max(NOISE_FLOOR_MIN, Math.min(NOISE_FLOOR_MAX, noiseFloorRef.current));
+          }
+          if (hasSpeechRef.current && totalSamplesRef.current > SAMPLE_RATE * (MIN_SPEECH_MS / 1000)) {
+            scheduleFlush();
+          }
         }
       };
 
@@ -410,6 +434,7 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
       src.connect(analyser); analyser.connect(processor); processor.connect(silence); silence.connect(ctx.destination);
 
       pcmChunksRef.current = []; totalSamplesRef.current = 0; hasSpeechRef.current = false;
+      noiseFloorRef.current = NOISE_FLOOR_INIT; warmupFramesRef.current = 0;
       isListeningRef.current = true;
       setIsListening(true);
 

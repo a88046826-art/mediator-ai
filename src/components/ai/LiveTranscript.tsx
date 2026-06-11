@@ -30,17 +30,42 @@ export function LiveTranscript({ entries, interimText }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-2 p-4 overflow-y-auto h-full">
+    <div className="flex flex-col gap-1.5 p-4 overflow-y-auto h-full">
       {entries.map((e) => (
-        <div key={e.id} className="flex gap-2 items-start">
-          <span className="shrink-0 w-12 mt-0.5 text-right text-[10px] font-mono text-slate-600">{e.time}</span>
-          <p className="text-sm text-slate-300 leading-relaxed">{e.text}</p>
+        <div key={e.id} className="flex gap-2.5 items-start animate-fadeIn group">
+          <span className="shrink-0 w-12 mt-1 text-right text-[10px] font-mono text-slate-600 group-hover:text-slate-500 transition-colors">
+            {e.time}
+          </span>
+          <div className="flex-1 min-w-0">
+            {e.speaker && (
+              <span className="text-[10px] font-medium text-accent/70 mb-0.5 block">{e.speaker}</span>
+            )}
+            <p className="text-sm text-slate-300 leading-relaxed break-words">{e.text}</p>
+          </div>
         </div>
       ))}
+
       {interimText && (
-        <div className="flex gap-2 items-start">
+        <div className="flex gap-2.5 items-start">
           <span className="text-[10px] font-mono text-slate-700 mt-1 shrink-0 w-12 text-right">…</span>
-          <p className="text-sm text-slate-500 leading-relaxed italic">{interimText}</p>
+          <div className="flex-1 flex items-center gap-2">
+            {interimText === '🎙 말하는 중...' || interimText === '인식 중...' ? (
+              <span className="text-xs text-slate-500 flex items-center gap-1.5">
+                <span className="flex gap-0.5">
+                  {[0, 1, 2].map((i) => (
+                    <span
+                      key={i}
+                      className="w-1 h-1 rounded-full bg-accent/50 animate-pulse inline-block"
+                      style={{ animationDelay: `${i * 0.2}s` }}
+                    />
+                  ))}
+                </span>
+                {interimText}
+              </span>
+            ) : (
+              <p className="text-sm text-slate-500 leading-relaxed italic break-words flex-1">{interimText}</p>
+            )}
+          </div>
         </div>
       )}
       <div ref={bottomRef} />
