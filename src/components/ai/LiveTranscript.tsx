@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import type { TranscriptEntry } from '@/types';
 
 export type { TranscriptEntry };
@@ -12,9 +12,19 @@ interface Props {
 
 export function LiveTranscript({ entries, interimText }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isAtBottomRef = useRef(true);
+
+  const handleScroll = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (isAtBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [entries, interimText]);
 
   if (entries.length === 0 && !interimText) {
@@ -30,7 +40,12 @@ export function LiveTranscript({ entries, interimText }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-1.5 p-4 overflow-y-auto h-full">
+    <div
+      ref={containerRef}
+      onScroll={handleScroll}
+      className="flex flex-col gap-1.5 p-4 overflow-y-auto h-full"
+      style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+    >
       {entries.map((e) => (
         <div key={e.id} className="flex gap-2.5 items-start animate-fadeIn group">
           <span className="shrink-0 w-12 mt-1 text-right text-[10px] font-mono text-slate-600 group-hover:text-slate-500 transition-colors">
