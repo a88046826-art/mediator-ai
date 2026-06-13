@@ -2,14 +2,31 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
-// Whisper가 오디오 없이 프롬프트 내용을 그대로 출력하는 할루시네이션 감지
-// 패턴: 2글자 이하 단어가 콤마로 연속되거나, 전체 텍스트가 콤마+공백 구분 단어 나열
+// Whisper/Groq 할루시네이션 감지: 완전히 동일한 단어가 반복되는 경우만 필터
+// (프롬프트 키워드 제거 후 실제 발화가 걸리는 오탐 방지)
 function isHallucination(text: string): boolean {
   if (!text) return false;
-  const tokens = text.split(/[,，、]\s*/);
-  if (tokens.length < 4) return false;
-  const shortWords = tokens.filter((t) => t.trim().length <= 4);
-  return shortWords.length / tokens.length >= 0.8;
+  // "기획, 개발, 디자인" 처럼 동일 패턴이 2회 이상 반복될 때만 필터
+  const half = text.slice(0, Math.floor(text.length / 2));
+  return half.length > 10 && text.startsWith(half) && text.slice(half.length).trim().startsWith(half.trim()[0]);
+}
+
+async function transcribeWithRetry(
+  url: string,
+  authHeader: string,
+  form: FormData,
+  maxRetries = 2,
+): Promise<Response> {
+  let last: Response | null = null;
+  for (let i = 0; i <= maxRetries; i++) {
+    const res = await fetch(url, { method: 'POST', headers: { Authorization: authHeader }, body: form });
+    if (res.status !== 429) return res;
+    last = res;
+    // Retry-After 헤더 있으면 그만큼, 없으면 지수 백오프
+    const retryAfter = Number(res.headers.get('retry-after') ?? 0);
+    await new Promise((r) => setTimeout(r, (retryAfter || (i + 1) * 2) * 1000));
+  }
+  return last!;
 }
 
 export async function POST(req: NextRequest) {
@@ -47,11 +64,11 @@ export async function POST(req: NextRequest) {
       form.append('language', 'ko');
       form.append('prompt', prompt);
 
-      const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${groqKey}` },
-        body: form,
-      });
+      const res = await transcribeWithRetry(
+        'https://api.groq.com/openai/v1/audio/transcriptions',
+        `Bearer ${groqKey}`,
+        form,
+      );
       if (!res.ok) {
         const body = await res.text().catch(() => '');
         throw new Error(`Groq ${res.status}: ${body}`);
