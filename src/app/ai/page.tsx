@@ -1003,12 +1003,23 @@ export default function AiPage() {
       <div className="max-w-2xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-2">
           <h1 className="text-xl font-bold text-slate-200">회의 종료</h1>
-          <button
-            onClick={handleNewMeeting}
-            className="px-3 py-1.5 text-xs rounded-lg border border-border text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-colors"
-          >
-            새 회의 시작
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                try { if (sessionCodeRef.current) await startMeeting(sessionCodeRef.current); } catch { /* ignore */ }
+                setPhase('meeting');
+              }}
+              className="px-3 py-1.5 text-xs rounded-lg border border-border text-slate-500 hover:text-slate-300 hover:border-slate-500 transition-colors"
+            >
+              ← 회의로 돌아가기
+            </button>
+            <button
+              onClick={handleNewMeeting}
+              className="px-3 py-1.5 text-xs rounded-lg border border-border text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-colors"
+            >
+              새 회의 시작
+            </button>
+          </div>
         </div>
         {topicForSummary && <p className="text-xs text-slate-500 mb-5">{topicForSummary}</p>}
 
