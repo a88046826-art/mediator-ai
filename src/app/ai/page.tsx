@@ -583,7 +583,7 @@ export default function AiPage() {
 
   // 디버그: 음성 인식 지원 여부 확인
   useEffect(() => {
-    if (!isSupported) showToast('이 브라우저는 음성 인식을 지원하지 않아요. Chrome을 사용해 주세요.', 'error');
+    if (!isSupported) showToast('마이크가 지원되지 않는 브라우저예요. Chrome 또는 Safari를 사용해 주세요.', 'error');
   }, [isSupported]);
 
   // AI 신호: 새 AI 메시지 → 딩 + 진동 + 뱃지

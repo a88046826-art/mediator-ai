@@ -373,6 +373,23 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
 
   const start = useCallback(async () => {
     if (isListeningRef.current) return;
+
+    // iOS Safari requires AudioContext to be created synchronously within a user gesture handler.
+    // Creating it after an `await` loses the gesture context and leaves the context suspended.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Ctx = window.AudioContext ?? (window as any).webkitAudioContext;
+    if (!Ctx) {
+      onErrorRef.current?.('이 브라우저는 오디오 기능을 지원하지 않습니다.');
+      return;
+    }
+    let ctx: AudioContext;
+    try {
+      ctx = new Ctx({ sampleRate: SAMPLE_RATE }) as AudioContext;
+    } catch {
+      ctx = new Ctx() as AudioContext; // older iOS ignores sampleRate option
+    }
+    void ctx.resume(); // fire-and-forget inside user gesture — satisfies iOS autoplay policy
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
@@ -382,10 +399,8 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
         if (isListeningRef.current) { stop(); onErrorRef.current?.('마이크 연결이 끊겼습니다. 다시 시작해 주세요.'); }
       });
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const Ctx = window.AudioContext ?? (window as any).webkitAudioContext;
-      const ctx = new Ctx({ sampleRate: SAMPLE_RATE }) as AudioContext;
-      await ctx.resume();
+      // Resume again in case the context ended up suspended after the async getUserMedia call
+      if (ctx.state === 'suspended') { try { await ctx.resume(); } catch { /* ignore */ } }
       audioCtxRef.current = ctx;
       actualSampleRate.current = ctx.sampleRate; // 실제 지원 샘플레이트 기록
 
@@ -471,6 +486,7 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
         }
       }, CHUNK_INTERVAL_MS);
     } catch (err) {
+      ctx.close().catch(() => {}); // cleanup pre-created AudioContext
       const isPerm = err instanceof Error && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError');
       onErrorRef.current?.(isPerm ? '마이크 권한을 허용해 주세요.' : '마이크를 시작할 수 없습니다.');
     }
@@ -485,7 +501,6 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
   return { isListening, isSupported, toggle, stop };
 }
 
-// ── 환경변수 기반 스위칭 ───────────────────────────────────────────────────────
-// NEXT_PUBLIC_CLOVA_ENABLED=true 설정 시 Clova, 없으면 Web Speech API 폴백
-export const useVoiceRecognition =
-  process.env.NEXT_PUBLIC_CLOVA_ENABLED === 'true' ? useClovaVoice : useWebSpeechVoice;
+// getUserMedia + Web Audio API 방식은 Chrome/Firefox/iOS Safari 모두 지원.
+// Web Speech API는 Chrome 전용이므로 항상 useClovaVoice 사용.
+export const useVoiceRecognition = useClovaVoice;
