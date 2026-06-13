@@ -277,9 +277,11 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
   const chunkIntervalRef  = useRef<ReturnType<typeof setInterval> | null>(null);
   const isSendingRef      = useRef(false);
   const hasSpeechRef      = useRef(false);
-  const noiseFloorRef     = useRef(NOISE_FLOOR_INIT); // 환경 적응형 노이즈 플로어
-  const warmupFramesRef   = useRef(0);               // 초기 캘리브레이션 프레임 수
+  const noiseFloorRef     = useRef(NOISE_FLOOR_INIT);
+  const warmupFramesRef   = useRef(0);
   const lastInterimRef    = useRef('');
+  const lastTranscriptRef = useRef('');         // 직전 인식 결과 → Whisper 문맥 프롬프트
+  const visibilityHandlerRef = useRef<(() => void) | null>(null); // AudioContext 재개용
 
   const setInterim = useCallback((text: string) => {
     if (text === lastInterimRef.current) return;
@@ -317,9 +319,10 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
     setInterim('인식 중...');
     try {
       const params = new URLSearchParams();
-      if (meetingTopic)    params.set('topic',    meetingTopic);
-      if (meetingSpeakers) params.set('speakers', meetingSpeakers);
-      const url = params.toString() ? `/api/stt?${params}` : '/api/stt';
+      if (meetingTopic)               params.set('topic',    meetingTopic);
+      if (meetingSpeakers)            params.set('speakers', meetingSpeakers);
+      if (lastTranscriptRef.current)  params.set('context',  lastTranscriptRef.current.slice(-120));
+      const url = `/api/stt?${params}`;
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'audio/wav' },
@@ -327,7 +330,10 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
       });
       if (res.ok) {
         const { text } = await res.json() as { text: string };
-        if (text?.trim()) onResultRef.current(text.trim());
+        if (text?.trim()) {
+          lastTranscriptRef.current = text.trim();
+          onResultRef.current(text.trim());
+        }
       } else if (res.status === 500) {
         const { error } = await res.json() as { error: string };
         if (error === 'STT not configured') onErrorRef.current?.('CLOVA 환경변수를 설정해 주세요.');
@@ -344,6 +350,10 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
   const teardown = useCallback(() => {
     if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
     if (chunkIntervalRef.current) { clearInterval(chunkIntervalRef.current); chunkIntervalRef.current = null; }
+    if (visibilityHandlerRef.current) {
+      document.removeEventListener('visibilitychange', visibilityHandlerRef.current);
+      visibilityHandlerRef.current = null;
+    }
     try { processorRef.current?.disconnect(); } catch { /* ignore */ }
     try { analyserRef.current?.disconnect(); } catch { /* ignore */ }
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -435,8 +445,18 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
 
       pcmChunksRef.current = []; totalSamplesRef.current = 0; hasSpeechRef.current = false;
       noiseFloorRef.current = NOISE_FLOOR_INIT; warmupFramesRef.current = 0;
+      lastTranscriptRef.current = '';
       isListeningRef.current = true;
       setIsListening(true);
+
+      // 탭이 백그라운드로 갔다가 돌아오면 AudioContext가 suspended → 자동 재개
+      const handleVisibility = () => {
+        if (document.visibilityState === 'visible' && audioCtxRef.current?.state === 'suspended') {
+          audioCtxRef.current.resume().catch(() => {});
+        }
+      };
+      visibilityHandlerRef.current = handleVisibility;
+      document.addEventListener('visibilitychange', handleVisibility);
 
       // 3초마다 자동 전송 — 녹음 중지 안 눌러도 실시간으로 텍스트 표시
       chunkIntervalRef.current = setInterval(() => {

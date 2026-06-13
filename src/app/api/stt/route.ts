@@ -53,9 +53,11 @@ export async function POST(req: NextRequest) {
     if (groqKey) {
       const topic    = req.nextUrl.searchParams.get('topic') ?? '';
       const speakers = req.nextUrl.searchParams.get('speakers') ?? '';
+      const context  = req.nextUrl.searchParams.get('context') ?? ''; // 직전 인식 문장
       const promptParts: string[] = [];
       if (topic)    promptParts.push(`회의 주제: ${topic}.`);
       if (speakers) promptParts.push(`참가자: ${speakers}.`);
+      if (context)  promptParts.push(context); // 이전 문장을 프롬프트 끝에 → 연속 문맥 인식
       const prompt = promptParts.join(' ') || '한국어로 진행되는 회의입니다.';
 
       const form = new FormData();
@@ -83,11 +85,11 @@ export async function POST(req: NextRequest) {
     if (openaiKey) {
       const topic    = req.nextUrl.searchParams.get('topic') ?? '';
       const speakers = req.nextUrl.searchParams.get('speakers') ?? '';
-      // 키워드 목록을 프롬프트에 넣으면 오디오 품질이 낮을 때 Whisper가 해당 단어를
-      // 그대로 출력하는 할루시네이션이 발생하므로 주제/참가자만 전달한다.
+      const context  = req.nextUrl.searchParams.get('context') ?? '';
       const promptParts: string[] = [];
       if (topic)    promptParts.push(`회의 주제: ${topic}.`);
       if (speakers) promptParts.push(`참가자: ${speakers}.`);
+      if (context)  promptParts.push(context);
       const prompt = promptParts.join(' ') || '한국어로 진행되는 회의입니다.';
 
       const form = new FormData();
