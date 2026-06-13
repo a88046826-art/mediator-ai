@@ -67,9 +67,14 @@ async function fetchSuggestion(userText: string): Promise<Suggestion> {
   const data = await res.json() as { content?: string; error?: string };
   if (!res.ok) throw new Error(data.error ?? 'API error');
   const text = data.content ?? '';
+  // 마크다운 볼드(**)와 콜론 앞뒤 공백에 무관하게 파싱
   const get = (prefix: string) => {
-    const line = text.split('\n').find((l) => l.startsWith(prefix));
-    return line ? line.slice(prefix.length).trim() : '';
+    const re = new RegExp(`${prefix}\\s*(.+)`);
+    for (const line of text.split('\n')) {
+      const m = re.exec(line.replace(/\*+/g, '').trim());
+      if (m) return m[1].trim();
+    }
+    return '';
   };
   return { purpose: get('목적:'), background: get('배경:'), outcome: get('결과물:') };
 }
@@ -99,6 +104,7 @@ export function MeetingSetup({ members, onStart }: Props) {
   const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
   const [isFetching, setIsFetching] = useState(false);
   const [appliedAll, setAppliedAll] = useState(false);
+  const [suggestError, setSuggestError] = useState('');
 
   // ── AI 역질문 ─────────────────────────────────────────────────────────────
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -137,9 +143,20 @@ export function MeetingSetup({ members, onStart }: Props) {
     if (isListening) toggle();
     setIsFetching(true);
     setSuggestion(null);
+    setSuggestError('');
     setAppliedAll(false);
-    try { setSuggestion(await fetchSuggestion(text)); } catch { /* silent */ }
-    finally { setIsFetching(false); }
+    try {
+      const result = await fetchSuggestion(text);
+      if (!result.purpose && !result.background && !result.outcome) {
+        setSuggestError('AI가 형식에 맞는 답변을 반환하지 못했어요. 조금 더 구체적으로 입력해 보세요.');
+      } else {
+        setSuggestion(result);
+      }
+    } catch {
+      setSuggestError('추천을 불러오는 데 실패했어요. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setIsFetching(false);
+    }
   };
 
   const applyOne = (key: FieldKey) => { if (suggestion?.[key]) set(key, suggestion[key]); };
@@ -268,6 +285,10 @@ export function MeetingSetup({ members, onStart }: Props) {
             ? <span className="flex items-center justify-center gap-1.5">{[0,1,2].map((i) => <span key={i} className="w-1 h-1 rounded-full bg-accent animate-pulse" style={{ animationDelay: `${i * 0.15}s` }} />)}</span>
             : '추천 받기'}
         </button>
+
+        {suggestError && (
+          <p className="text-xs text-red-400 text-center">{suggestError}</p>
+        )}
 
         {suggestion && (
           <div className="space-y-2 pt-1">
