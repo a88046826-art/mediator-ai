@@ -13,12 +13,13 @@ function isHallucination(text: string): boolean {
 }
 
 export async function POST(req: NextRequest) {
+  const groqKey      = process.env.GROQ_API_KEY;
   const openaiKey    = process.env.OPENAI_API_KEY;
   const speechSecret = process.env.CLOVA_SPEECH_SECRET;
   const csrId        = process.env.CLOVA_CLIENT_ID;
   const csrSecret    = process.env.CLOVA_CLIENT_SECRET;
 
-  if (!openaiKey && !speechSecret && (!csrId || !csrSecret)) {
+  if (!groqKey && !openaiKey && !speechSecret && (!csrId || !csrSecret)) {
     return NextResponse.json({ error: 'STT not configured' }, { status: 500 });
   }
 
@@ -31,7 +32,37 @@ export async function POST(req: NextRequest) {
     const audio = await req.arrayBuffer();
     if (audio.byteLength < 44) return NextResponse.json({ text: '' });
 
-    // 1순위: OpenAI Whisper
+    // 1순위: Groq Whisper (whisper-large-v3-turbo — 더 정확, 10배 빠름)
+    if (groqKey) {
+      const topic    = req.nextUrl.searchParams.get('topic') ?? '';
+      const speakers = req.nextUrl.searchParams.get('speakers') ?? '';
+      const promptParts: string[] = [];
+      if (topic)    promptParts.push(`회의 주제: ${topic}.`);
+      if (speakers) promptParts.push(`참가자: ${speakers}.`);
+      const prompt = promptParts.join(' ') || '한국어로 진행되는 회의입니다.';
+
+      const form = new FormData();
+      form.append('file', new Blob([audio], { type: 'audio/wav' }), 'audio.wav');
+      form.append('model', 'whisper-large-v3-turbo');
+      form.append('language', 'ko');
+      form.append('prompt', prompt);
+
+      const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${groqKey}` },
+        body: form,
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`Groq ${res.status}: ${body}`);
+      }
+      const data = await res.json() as { text?: string };
+      const text = (data.text ?? '').trim();
+      if (isHallucination(text)) return NextResponse.json({ text: '' });
+      return NextResponse.json({ text });
+    }
+
+    // 2순위: OpenAI Whisper
     if (openaiKey) {
       const topic    = req.nextUrl.searchParams.get('topic') ?? '';
       const speakers = req.nextUrl.searchParams.get('speakers') ?? '';
