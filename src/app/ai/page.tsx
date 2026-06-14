@@ -16,6 +16,7 @@ import {
   startMeeting, endMeeting,
   addTranscript as fbAddTranscript,
   updateTranscriptText as fbUpdateTranscriptText,
+  removeTranscript as fbRemoveTranscript,
   addAiMessage as fbAddAiMessage,
   addSetupEntry,
   type SessionTranscriptEntry, type SessionAiMessage,
@@ -309,6 +310,8 @@ export default function AiPage() {
   const [flashAiPanel, setFlashAiPanel] = useState(false);
   const [isSoundMuted, setIsSoundMuted] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [aiNotification, setAiNotification] = useState<{ content: string; isAlert: boolean } | null>(null);
+  const aiNotificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const meetingStartTimeRef = useRef(0);
   // snapshot saved when meeting ends (for summary)
   const summaryTranscriptRef = useRef<SessionTranscriptEntry[]>([]);
@@ -534,6 +537,11 @@ export default function AiPage() {
     }
   }, []);
 
+  const handleDeleteTranscript = useCallback(async (entryId: string) => {
+    if (!sessionCodeRef.current) return;
+    try { await fbRemoveTranscript(sessionCodeRef.current, entryId); } catch { /* ignore */ }
+  }, []);
+
   const handleVoiceResult = useCallback(async (text: string) => {
     if (!sessionCodeRef.current) {
       showToast('세션 없음 — 방 코드를 확인하세요', 'error');
@@ -586,10 +594,11 @@ export default function AiPage() {
     if (!isSupported) showToast('마이크가 지원되지 않는 브라우저예요. Chrome 또는 Safari를 사용해 주세요.', 'error');
   }, [isSupported]);
 
-  // AI 신호: 새 AI 메시지 → 딩 + 진동 + 뱃지
+  // AI 신호: 새 AI 메시지 → 딩 + 진동 + 뱃지 + 모바일 알림 배너
   useEffect(() => {
     if (phase !== 'meeting') { prevAiLengthRef.current = 0; return; }
-    const aiOnlyCount = (sessionState?.aiMessages ?? []).filter((m) => m.role === 'ai').length;
+    const aiMessages = (sessionState?.aiMessages ?? []).filter((m) => m.role === 'ai');
+    const aiOnlyCount = aiMessages.length;
     if (prevAiLengthRef.current > 0 && aiOnlyCount > prevAiLengthRef.current) {
       const newMsgs = aiOnlyCount - prevAiLengthRef.current;
       if (!isSoundMuted) playDing();
@@ -599,6 +608,16 @@ export default function AiPage() {
       const isDesktop = typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches;
       if (!isDesktop && activeTabRef.current !== 'ai') {
         setUnreadAiCount((prev) => prev + newMsgs);
+        // 모바일에서 AI탭이 아닐 때: 배너로 메시지 내용 즉시 표시
+        const latest = aiMessages[aiMessages.length - 1];
+        if (latest) {
+          if (aiNotificationTimerRef.current) clearTimeout(aiNotificationTimerRef.current);
+          setAiNotification({ content: latest.content, isAlert: latest.isAlert });
+          aiNotificationTimerRef.current = setTimeout(() => {
+            setAiNotification(null);
+            aiNotificationTimerRef.current = null;
+          }, 8000);
+        }
       }
     }
     prevAiLengthRef.current = aiOnlyCount;
@@ -1254,6 +1273,38 @@ export default function AiPage() {
         </div>
       )}
 
+      {/* 모바일 AI 알림 배너: AI탭이 아닐 때도 중재 내용을 즉시 표시 */}
+      {aiNotification && (
+        <div className={`sm:hidden shrink-0 flex items-start gap-3 px-4 py-3 border-b text-sm animate-fadeIn ${
+          aiNotification.isAlert
+            ? 'bg-orange-500/15 border-orange-500/40 text-orange-100'
+            : 'bg-violet-500/15 border-violet-500/40 text-slate-200'
+        }`}>
+          <span className="shrink-0 mt-0.5 text-base">{aiNotification.isAlert ? '⚡' : '🤖'}</span>
+          <p className="flex-1 text-xs leading-relaxed line-clamp-3">{aiNotification.content}</p>
+          <button
+            onClick={() => {
+              setAiNotification(null);
+              if (aiNotificationTimerRef.current) { clearTimeout(aiNotificationTimerRef.current); aiNotificationTimerRef.current = null; }
+              setActiveTab('ai');
+              setUnreadAiCount(0);
+            }}
+            className="shrink-0 text-xs opacity-60 hover:opacity-100 px-2 py-1 rounded bg-white/10"
+          >
+            자세히
+          </button>
+          <button
+            onClick={() => {
+              setAiNotification(null);
+              if (aiNotificationTimerRef.current) { clearTimeout(aiNotificationTimerRef.current); aiNotificationTimerRef.current = null; }
+            }}
+            className="shrink-0 opacity-40 hover:opacity-80 text-base leading-none"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* header */}
       <div className="shrink-0 flex items-center justify-between px-4 py-2.5 border-b border-border bg-surface">
         <div className="flex items-center gap-2">
@@ -1315,7 +1366,7 @@ export default function AiPage() {
           {activeTab === 'transcript' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />}
         </button>
         <button
-          onClick={() => { setActiveTab('ai'); setUnreadAiCount(0); }}
+          onClick={() => { setActiveTab('ai'); setUnreadAiCount(0); setAiNotification(null); if (aiNotificationTimerRef.current) { clearTimeout(aiNotificationTimerRef.current); aiNotificationTimerRef.current = null; } }}
           className={`flex-1 py-2 text-xs font-medium transition-colors relative ${
             unreadAiCount > 0 ? 'text-violet-400' : activeTab === 'ai' ? 'text-accent' : 'text-slate-500'
           }`}
@@ -1439,7 +1490,7 @@ export default function AiPage() {
             <div className="shrink-0 px-4 pt-3 pb-2 border-b border-border/40">
               <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">대화 기록</p>
             </div>
-            <LiveTranscript entries={displayTranscript} interimText={interimText} />
+            <LiveTranscript entries={displayTranscript} interimText={interimText} onDelete={handleDeleteTranscript} />
           </div>
         )}
 

@@ -1,5 +1,5 @@
 import { getDb } from './firebase';
-import { ref, set, push, update, get } from 'firebase/database';
+import { ref, set, push, update, get, remove } from 'firebase/database';
 
 
 export interface SessionMember {
@@ -117,6 +117,10 @@ export async function addSetupEntry(code: string, role: 'user' | 'ai', text: str
   const db = getDb();
   const newRef = push(ref(db, `sessions/${code}/setupChat`));
   await set(newRef, { id: newRef.key!, role, text, createdAt: Date.now() });
+}
+
+export async function removeTranscript(code: string, entryId: string): Promise<void> {
+  await remove(ref(getDb(), `sessions/${code}/transcript/${entryId}`));
 }
 
 export async function addAiMessage(

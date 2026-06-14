@@ -8,9 +8,10 @@ export type { TranscriptEntry };
 interface Props {
   entries: TranscriptEntry[];
   interimText?: string;
+  onDelete?: (id: string) => void;
 }
 
-export function LiveTranscript({ entries, interimText }: Props) {
+export function LiveTranscript({ entries, interimText, onDelete }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
@@ -57,6 +58,16 @@ export function LiveTranscript({ entries, interimText }: Props) {
             )}
             <p className="text-sm text-slate-300 leading-relaxed break-words">{e.text}</p>
           </div>
+          {onDelete && (
+            <button
+              onClick={() => onDelete(e.id)}
+              className="shrink-0 opacity-0 group-hover:opacity-100 active:opacity-100 w-5 h-5 mt-1 flex items-center justify-center rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-all"
+              title="삭제"
+              aria-label="발화 삭제"
+            >
+              ×
+            </button>
+          )}
         </div>
       ))}
 
