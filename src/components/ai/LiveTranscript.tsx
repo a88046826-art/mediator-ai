@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import type { TranscriptEntry } from '@/types';
 
 export type { TranscriptEntry };
@@ -9,12 +9,16 @@ interface Props {
   entries: TranscriptEntry[];
   interimText?: string;
   onDelete?: (id: string) => void;
+  onEdit?: (id: string, newText: string) => void;
 }
 
-export function LiveTranscript({ entries, interimText, onDelete }: Props) {
+export function LiveTranscript({ entries, interimText, onDelete, onEdit }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+  const editInputRef = useRef<HTMLInputElement>(null);
 
   const handleScroll = useCallback(() => {
     const el = containerRef.current;
@@ -27,6 +31,25 @@ export function LiveTranscript({ entries, interimText, onDelete }: Props) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [entries, interimText]);
+
+  useEffect(() => {
+    if (editingId) editInputRef.current?.focus();
+  }, [editingId]);
+
+  const startEdit = useCallback((id: string, text: string) => {
+    setEditingId(id);
+    setEditText(text);
+  }, []);
+
+  const commitEdit = useCallback((id: string) => {
+    const trimmed = editText.trim();
+    if (trimmed && onEdit) onEdit(id, trimmed);
+    setEditingId(null);
+  }, [editText, onEdit]);
+
+  const cancelEdit = useCallback(() => {
+    setEditingId(null);
+  }, []);
 
   if (entries.length === 0 && !interimText) {
     return (
@@ -56,17 +79,58 @@ export function LiveTranscript({ entries, interimText, onDelete }: Props) {
             {e.speaker && (
               <span className="text-[10px] font-medium text-accent/70 mb-0.5 block">{e.speaker}</span>
             )}
-            <p className="text-sm text-slate-300 leading-relaxed break-words">{e.text}</p>
+            {editingId === e.id ? (
+              <div className="flex gap-1.5 items-center">
+                <input
+                  ref={editInputRef}
+                  value={editText}
+                  onChange={(ev) => setEditText(ev.target.value)}
+                  onKeyDown={(ev) => {
+                    if (ev.key === 'Enter') commitEdit(e.id);
+                    if (ev.key === 'Escape') cancelEdit();
+                  }}
+                  className="flex-1 bg-white/8 border border-accent/40 rounded px-2 py-0.5 text-sm text-slate-200 outline-none focus:border-accent"
+                />
+                <button
+                  onClick={() => commitEdit(e.id)}
+                  className="text-[11px] px-2 py-0.5 rounded bg-accent/20 text-accent hover:bg-accent/30 transition-colors shrink-0"
+                >
+                  저장
+                </button>
+                <button
+                  onClick={cancelEdit}
+                  className="text-[11px] px-2 py-0.5 rounded text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors shrink-0"
+                >
+                  취소
+                </button>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-300 leading-relaxed break-words">{e.text}</p>
+            )}
           </div>
-          {onDelete && (
-            <button
-              onClick={() => onDelete(e.id)}
-              className="shrink-0 opacity-0 group-hover:opacity-100 active:opacity-100 w-5 h-5 mt-1 flex items-center justify-center rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-all"
-              title="삭제"
-              aria-label="발화 삭제"
-            >
-              ×
-            </button>
+          {!editingId && (onEdit || onDelete) && (
+            <div className="shrink-0 opacity-0 group-hover:opacity-100 active:opacity-100 flex gap-1 mt-1 transition-all">
+              {onEdit && (
+                <button
+                  onClick={() => startEdit(e.id, e.text)}
+                  className="w-5 h-5 flex items-center justify-center rounded text-slate-600 hover:text-accent hover:bg-accent/10 transition-colors text-[11px]"
+                  title="수정"
+                  aria-label="발화 수정"
+                >
+                  ✎
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  onClick={() => onDelete(e.id)}
+                  className="w-5 h-5 flex items-center justify-center rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                  title="삭제"
+                  aria-label="발화 삭제"
+                >
+                  ×
+                </button>
+              )}
+            </div>
           )}
         </div>
       ))}

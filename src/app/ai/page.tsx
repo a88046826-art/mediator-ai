@@ -542,6 +542,11 @@ export default function AiPage() {
     try { await fbRemoveTranscript(sessionCodeRef.current, entryId); } catch { /* ignore */ }
   }, []);
 
+  const handleEditTranscript = useCallback(async (entryId: string, newText: string) => {
+    if (!sessionCodeRef.current) return;
+    try { await fbUpdateTranscriptText(sessionCodeRef.current, entryId, newText); } catch { /* ignore */ }
+  }, []);
+
   const handleVoiceResult = useCallback(async (text: string) => {
     if (!sessionCodeRef.current) {
       showToast('세션 없음 — 방 코드를 확인하세요', 'error');
@@ -1490,7 +1495,7 @@ export default function AiPage() {
             <div className="shrink-0 px-4 pt-3 pb-2 border-b border-border/40">
               <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">대화 기록</p>
             </div>
-            <LiveTranscript entries={displayTranscript} interimText={interimText} onDelete={handleDeleteTranscript} />
+            <LiveTranscript entries={displayTranscript} interimText={interimText} onDelete={handleDeleteTranscript} onEdit={handleEditTranscript} />
           </div>
         )}
 
