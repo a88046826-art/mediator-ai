@@ -16,9 +16,12 @@ export function LiveTranscript({ entries, interimText, onDelete, onEdit }: Props
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
+
+  // 수정 상태를 ref + state 동시에 관리:
+  // ref는 scroll effect 내부에서 동기적으로 읽어 타이밍 어긋남 방지
+  const editingIdRef = useRef<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
-  const editInputRef = useRef<HTMLInputElement>(null);
 
   const handleScroll = useCallback(() => {
     const el = containerRef.current;
@@ -26,18 +29,16 @@ export function LiveTranscript({ entries, interimText, onDelete, onEdit }: Props
     isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
   }, []);
 
+  // ref로 체크하므로 editingId를 deps에 넣지 않아도 항상 최신값 반영
   useEffect(() => {
-    if (editingId) return; // 수정 중엔 자동 스크롤 중단
+    if (editingIdRef.current) return; // 수정 중엔 절대 스크롤 안 함
     if (isAtBottomRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [entries, interimText, editingId]);
-
-  useEffect(() => {
-    if (editingId) editInputRef.current?.focus();
-  }, [editingId]);
+  }, [entries, interimText]);
 
   const startEdit = useCallback((id: string, text: string) => {
+    editingIdRef.current = id; // ref 먼저 → 이 시점 이후 scroll effect는 모두 차단
     setEditingId(id);
     setEditText(text);
   }, []);
@@ -45,10 +46,12 @@ export function LiveTranscript({ entries, interimText, onDelete, onEdit }: Props
   const commitEdit = useCallback((id: string) => {
     const trimmed = editText.trim();
     if (trimmed && onEdit) onEdit(id, trimmed);
+    editingIdRef.current = null;
     setEditingId(null);
   }, [editText, onEdit]);
 
   const cancelEdit = useCallback(() => {
+    editingIdRef.current = null;
     setEditingId(null);
   }, []);
 
@@ -83,7 +86,12 @@ export function LiveTranscript({ entries, interimText, onDelete, onEdit }: Props
             {editingId === e.id ? (
               <div className="flex gap-1.5 items-center">
                 <input
-                  ref={editInputRef}
+                  // ref callback으로 마운트 즉시 focus — preventScroll로 컨테이너 스크롤 방지
+                  ref={(el) => {
+                    if (el) {
+                      try { el.focus({ preventScroll: true }); } catch { el.focus(); }
+                    }
+                  }}
                   value={editText}
                   onChange={(ev) => setEditText(ev.target.value)}
                   onKeyDown={(ev) => {
