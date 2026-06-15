@@ -27,10 +27,11 @@ export function LiveTranscript({ entries, interimText, onDelete, onEdit }: Props
   }, []);
 
   useEffect(() => {
+    if (editingId) return; // 수정 중엔 자동 스크롤 중단
     if (isAtBottomRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [entries, interimText]);
+  }, [entries, interimText, editingId]);
 
   useEffect(() => {
     if (editingId) editInputRef.current?.focus();
