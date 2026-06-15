@@ -44,7 +44,9 @@ export function ChatWindow({ messages, isLoading, suppressScroll }: Props) {
     if (isAtBottomRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, isLoading]);
+  // 배열 참조가 아닌 길이로 비교 — 부모 리렌더로 인한 참조 변경에 반응하지 않음
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length, isLoading]);
 
   return (
     <div

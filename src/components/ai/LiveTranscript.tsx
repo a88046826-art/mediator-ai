@@ -35,7 +35,9 @@ export function LiveTranscript({ entries, interimText, onDelete, onEdit }: Props
     if (isAtBottomRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [entries, interimText]);
+  // 배열 참조가 아닌 길이로 비교 — 부모 리렌더로 인한 참조 변경에 반응하지 않음
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entries.length, interimText]);
 
   const startEdit = useCallback((id: string, text: string) => {
     editingIdRef.current = id; // ref 먼저 → 이 시점 이후 scroll effect는 모두 차단
