@@ -275,6 +275,7 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
   const isListeningRef    = useRef(false);
   const silenceTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chunkIntervalRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+  const heartbeatRef      = useRef<ReturnType<typeof setInterval> | null>(null);
   const isSendingRef      = useRef(false);
   const hasSpeechRef      = useRef(false);
   const noiseFloorRef     = useRef(NOISE_FLOOR_INIT);
@@ -323,11 +324,15 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
       if (meetingSpeakers)            params.set('speakers', meetingSpeakers);
       if (lastTranscriptRef.current)  params.set('context',  lastTranscriptRef.current.slice(-120));
       const url = `/api/stt?${params}`;
+      const abort = new AbortController();
+      const timeoutId = setTimeout(() => abort.abort(), 15000); // Groq hang 방지
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'audio/wav' },
         body: encodeWAV(processed, SAMPLE_RATE),
+        signal: abort.signal,
       });
+      clearTimeout(timeoutId);
       if (res.ok) {
         const { text } = await res.json() as { text: string };
         if (text?.trim()) {
@@ -350,6 +355,7 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
   const teardown = useCallback(() => {
     if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
     if (chunkIntervalRef.current) { clearInterval(chunkIntervalRef.current); chunkIntervalRef.current = null; }
+    if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
     if (visibilityHandlerRef.current) {
       document.removeEventListener('visibilitychange', visibilityHandlerRef.current);
       visibilityHandlerRef.current = null;
@@ -464,7 +470,7 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
       isListeningRef.current = true;
       setIsListening(true);
 
-      // 탭이 백그라운드로 갔다가 돌아오면 AudioContext가 suspended → 자동 재개
+      // 탭 전환 시 AudioContext resume
       const handleVisibility = () => {
         if (document.visibilityState === 'visible' && audioCtxRef.current?.state === 'suspended') {
           audioCtxRef.current.resume().catch(() => {});
@@ -472,6 +478,21 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
       };
       visibilityHandlerRef.current = handleVisibility;
       document.addEventListener('visibilitychange', handleVisibility);
+
+      // AudioContext statechange 감지: 알림음·화면잠금 등으로 suspend돼도 즉시 resume
+      ctx.addEventListener('statechange', () => {
+        if (audioCtxRef.current?.state === 'suspended' && isListeningRef.current) {
+          audioCtxRef.current.resume().catch(() => {});
+        }
+      });
+
+      // 3초마다 AudioContext 상태 체크 heartbeat (statechange 미발화 대비)
+      heartbeatRef.current = setInterval(() => {
+        if (!isListeningRef.current) return;
+        if (audioCtxRef.current?.state === 'suspended') {
+          audioCtxRef.current.resume().catch(() => {});
+        }
+      }, 3000);
 
       // 3초마다 자동 전송 — 녹음 중지 안 눌러도 실시간으로 텍스트 표시
       chunkIntervalRef.current = setInterval(() => {
