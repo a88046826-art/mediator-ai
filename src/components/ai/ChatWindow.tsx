@@ -6,6 +6,7 @@ import type { Message } from '@/types';
 interface Props {
   messages: Message[];
   isLoading: boolean;
+  suppressScroll?: boolean;
 }
 
 function aiBubbleStyle(content: string, isAlert: boolean): string {
@@ -25,10 +26,12 @@ function formatTime(ts: string | undefined): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-export function ChatWindow({ messages, isLoading }: Props) {
+export function ChatWindow({ messages, isLoading, suppressScroll }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
+  const suppressScrollRef = useRef(suppressScroll);
+  suppressScrollRef.current = suppressScroll;
 
   const handleScroll = useCallback(() => {
     const el = containerRef.current;
@@ -37,7 +40,7 @@ export function ChatWindow({ messages, isLoading }: Props) {
   }, []);
 
   useEffect(() => {
-    // 사용자가 이미 맨 아래에 있을 때만 자동 스크롤 (위로 읽는 중이면 고정)
+    if (suppressScrollRef.current) return; // 채팅 입력창 포커스 중엔 스크롤 금지
     if (isAtBottomRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }

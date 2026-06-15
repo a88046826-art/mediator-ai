@@ -310,6 +310,7 @@ export default function AiPage() {
   const [flashAiPanel, setFlashAiPanel] = useState(false);
   const [isSoundMuted, setIsSoundMuted] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [isChatInput, setIsChatInput] = useState(false);
   const [aiNotification, setAiNotification] = useState<{ content: string; isAlert: boolean } | null>(null);
   const aiNotificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const meetingStartTimeRef = useRef(0);
@@ -1257,7 +1258,7 @@ export default function AiPage() {
   };
 
   return (
-    <div className="flex flex-col" style={{ height: 'calc(100vh - 4rem)' }}>
+    <div className="flex flex-col" style={{ height: 'calc(100dvh - 4rem)' }}>
 
       {micBlocked && (
         <div className="shrink-0 flex items-start gap-3 px-4 py-3 bg-red-500/10 border-b border-red-500/30 text-sm text-red-300">
@@ -1506,7 +1507,7 @@ export default function AiPage() {
                 AI 중재{flashAiPanel ? ' ●' : ''}
               </p>
             </div>
-            <ChatWindow messages={displayMessages} isLoading={isChatting} />
+            <ChatWindow messages={displayMessages} isLoading={isChatting} suppressScroll={isChatInput} />
             <div className="shrink-0 border-t border-border/40 px-3 py-2.5 flex gap-2 items-center bg-surface">
               <input
                 ref={chatInputRef}
@@ -1514,6 +1515,8 @@ export default function AiPage() {
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChatSend(); } }}
+                onFocus={() => setIsChatInput(true)}
+                onBlur={() => setIsChatInput(false)}
                 placeholder="중재자에게 질문 또는 맥락 전달..."
                 className="input-base flex-1 text-sm py-2"
                 disabled={isChatting}
