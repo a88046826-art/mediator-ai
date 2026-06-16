@@ -265,8 +265,7 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
   useEffect(() => { onErrorRef.current   = onError; },   [onError]);
 
   const audioCtxRef       = useRef<AudioContext | null>(null);
-  const processorRef      = useRef<ScriptProcessorNode | null>(null);
-  const analyserRef       = useRef<AnalyserNode | null>(null);
+  const workletNodeRef    = useRef<AudioWorkletNode | null>(null);
   const streamRef         = useRef<MediaStream | null>(null);
   const actualSampleRate  = useRef(SAMPLE_RATE);
 
@@ -360,12 +359,11 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
       document.removeEventListener('visibilitychange', visibilityHandlerRef.current);
       visibilityHandlerRef.current = null;
     }
-    try { processorRef.current?.disconnect(); } catch { /* ignore */ }
-    try { analyserRef.current?.disconnect(); } catch { /* ignore */ }
+    try { workletNodeRef.current?.disconnect(); } catch { /* ignore */ }
     streamRef.current?.getTracks().forEach((t) => t.stop());
     audioCtxRef.current?.close().catch(() => {});
-    processorRef.current = null; analyserRef.current = null;
-    streamRef.current = null;   audioCtxRef.current = null;
+    workletNodeRef.current = null;
+    streamRef.current = null; audioCtxRef.current = null;
   }, []);
 
   const stop = useCallback(() => {
@@ -410,16 +408,13 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
       audioCtxRef.current = ctx;
       actualSampleRate.current = ctx.sampleRate; // 실제 지원 샘플레이트 기록
 
-      const analyser = ctx.createAnalyser();
-      analyserRef.current = analyser;
+      await ctx.audioWorklet.addModule('/audio-processor.worklet.js');
+      const workletNode = new AudioWorkletNode(ctx, 'pcm-processor');
+      workletNodeRef.current = workletNode;
 
-      // eslint-disable-next-line @typescript-eslint/no-deprecated
-      const processor = ctx.createScriptProcessor(4096, 1, 1);
-      processorRef.current = processor;
-
-      processor.onaudioprocess = (e) => {
+      workletNode.port.onmessage = (e: MessageEvent<Float32Array>) => {
         if (!isListeningRef.current) return;
-        const input = e.inputBuffer.getChannelData(0);
+        const input = e.data;
         // 실제 샘플레이트 → 16000Hz 다운샘플 (48000Hz 기기 대응)
         const pcm = resampleTo16k(input, actualSampleRate.current);
         pcmChunksRef.current.push(pcm);
@@ -462,7 +457,9 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
       const src = ctx.createMediaStreamSource(stream);
       const silence = ctx.createGain();
       silence.gain.value = 0;
-      src.connect(analyser); analyser.connect(processor); processor.connect(silence); silence.connect(ctx.destination);
+      src.connect(workletNode);
+      workletNode.connect(silence);
+      silence.connect(ctx.destination);
 
       pcmChunksRef.current = []; totalSamplesRef.current = 0; hasSpeechRef.current = false;
       noiseFloorRef.current = NOISE_FLOOR_INIT; warmupFramesRef.current = 0;
