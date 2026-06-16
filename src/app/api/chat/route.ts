@@ -3,6 +3,8 @@ import Anthropic from '@anthropic-ai/sdk';
 
 const ALLOWED_ORIGINS = [
   'https://mediator-ai-eight.vercel.app',
+  'https://www.meditor.cc',
+  'https://meditor.cc',
   'http://localhost:3000',
   'http://localhost:3001',
 ];
