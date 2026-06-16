@@ -313,6 +313,11 @@ export default function AiPage() {
   const [isChatInput, setIsChatInput] = useState(false);
   const [aiNotification, setAiNotification] = useState<{ content: string; isAlert: boolean } | null>(null);
   const aiNotificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [overlayMode, setOverlayMode] = useState(false);
+  const overlayModeRef = useRef(false);
+  overlayModeRef.current = overlayMode;
+  const [overlayCard, setOverlayCard] = useState<{ content: string; isAlert: boolean } | null>(null);
+  const overlayCardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const meetingStartTimeRef = useRef(0);
   // snapshot saved when meeting ends (for summary)
   const summaryTranscriptRef = useRef<SessionTranscriptEntry[]>([]);
@@ -611,18 +616,38 @@ export default function AiPage() {
       try { navigator.vibrate?.(200); } catch { /* ignore */ }
       setFlashAiPanel(true);
       setTimeout(() => setFlashAiPanel(false), 1200);
-      const isDesktop = typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches;
-      if (!isDesktop && activeTabRef.current !== 'ai') {
-        setUnreadAiCount((prev) => prev + newMsgs);
-        // 모바일에서 AI탭이 아닐 때: 배너로 메시지 내용 즉시 표시
-        const latest = aiMessages[aiMessages.length - 1];
+      const latest = aiMessages[aiMessages.length - 1];
+      if (overlayModeRef.current) {
+        // 오버레이 카드 모드: 전체 화면에 카드로 표시
         if (latest) {
-          if (aiNotificationTimerRef.current) clearTimeout(aiNotificationTimerRef.current);
-          setAiNotification({ content: latest.content, isAlert: latest.isAlert });
-          aiNotificationTimerRef.current = setTimeout(() => {
-            setAiNotification(null);
-            aiNotificationTimerRef.current = null;
-          }, 8000);
+          if (overlayCardTimerRef.current) clearTimeout(overlayCardTimerRef.current);
+          const showCard = () => {
+            setOverlayCard({ content: latest.content, isAlert: latest.isAlert });
+            overlayCardTimerRef.current = setTimeout(() => {
+              setOverlayCard(null);
+              overlayCardTimerRef.current = null;
+            }, 12000);
+          };
+          if (latest.isAlert) {
+            showCard();
+          } else {
+            overlayCardTimerRef.current = setTimeout(showCard, 2000);
+          }
+        }
+        if (activeTabRef.current !== 'ai') setUnreadAiCount((prev) => prev + newMsgs);
+      } else {
+        // 탭 모드 (기본): 모바일 배너 표시
+        const isDesktop = typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches;
+        if (!isDesktop && activeTabRef.current !== 'ai') {
+          setUnreadAiCount((prev) => prev + newMsgs);
+          if (latest) {
+            if (aiNotificationTimerRef.current) clearTimeout(aiNotificationTimerRef.current);
+            setAiNotification({ content: latest.content, isAlert: latest.isAlert });
+            aiNotificationTimerRef.current = setTimeout(() => {
+              setAiNotification(null);
+              aiNotificationTimerRef.current = null;
+            }, 8000);
+          }
         }
       }
     }
@@ -1345,19 +1370,29 @@ export default function AiPage() {
           <button
             onClick={() => setIsSoundMuted((v) => !v)}
             title={isSoundMuted ? '소리 켜기' : '소리 끄기'}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors"
+            className="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors"
           >
             {isSoundMuted ? (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707A1 1 0 0112 5v14a1 1 0 01-1.707.707L5.586 15z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
               </svg>
             ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072M12 6v12m0 0l-4.243-4.243M12 18l4.243-4.243M12 6L7.757 10.243M12 6l4.243 4.243" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707A1 1 0 0112 5v14a1 1 0 01-1.707.707L5.586 15z" />
               </svg>
             )}
+          </button>
+          <button
+            onClick={() => setOverlayMode((v) => !v)}
+            title={overlayMode ? '탭 모드로 전환' : '오버레이 카드 모드로 전환'}
+            className={`p-2 rounded-lg transition-colors ${overlayMode ? 'text-accent bg-accent/15 hover:bg-accent/25' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <rect x="3" y="5" width="18" height="14" rx="2" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7 10h10M7 14h6" />
+            </svg>
           </button>
         </div>
       </div>
@@ -1542,6 +1577,49 @@ export default function AiPage() {
         onExport={handleExport}
         onEnd={handleEnd}
       />
+
+      {/* 오버레이 카드 모드: 새 AI 중재 메시지를 전체화면 팝업으로 표시 */}
+      {overlayCard && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => {
+              if (overlayCardTimerRef.current) { clearTimeout(overlayCardTimerRef.current); overlayCardTimerRef.current = null; }
+              setOverlayCard(null);
+            }}
+          />
+          <div className={`relative w-full max-w-sm rounded-2xl border p-5 shadow-2xl animate-fadeIn ${
+            overlayCard.isAlert
+              ? 'bg-orange-950/95 border-orange-500/50'
+              : 'bg-[#1a1a2e]/95 border-border'
+          }`}>
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-8 h-8 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center text-sm shrink-0 mt-0.5">
+                🤖
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-[10px] font-mono uppercase tracking-widest mb-2 ${overlayCard.isAlert ? 'text-orange-400' : 'text-accent'}`}>
+                  {overlayCard.isAlert ? '⚡ 긴급 중재' : 'AI 중재자'}
+                </p>
+                <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">{overlayCard.content}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                if (overlayCardTimerRef.current) { clearTimeout(overlayCardTimerRef.current); overlayCardTimerRef.current = null; }
+                setOverlayCard(null);
+              }}
+              className={`w-full py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                overlayCard.isAlert
+                  ? 'bg-orange-500/20 text-orange-300 hover:bg-orange-500/30'
+                  : 'bg-accent/15 text-accent hover:bg-accent/25'
+              }`}
+            >
+              확인
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
