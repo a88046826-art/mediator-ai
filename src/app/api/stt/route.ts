@@ -3,8 +3,13 @@ import { NextRequest, NextResponse } from 'next/server';
 const MAX_BYTES = 10 * 1024 * 1024;
 
 // Whisper 할루시네이션 감지: 불명확한 오디오에서 같은 문장을 반복 출력하는 현상 필터
+// Groq가 무음/노이즈에서 출력하는 프롬프트 echo 패턴
+const PROMPT_ECHOES = ['한국어 팀 회의입니다.'];
+
 function isHallucination(text: string): boolean {
   if (!text || text.length < 10) return false;
+  // 패턴0: 프롬프트 echo — Groq가 무음 시 프롬프트 그대로 반환
+  if (PROMPT_ECHOES.some((p) => text === p || text.startsWith(p + ' '))) return true;
   // 패턴1: 텍스트 전반부가 후반부에 그대로 반복 (단순 loop)
   const half = text.slice(0, Math.floor(text.length / 2));
   if (half.length > 10 && text.slice(half.length).trimStart().startsWith(half.trimStart().slice(0, 8))) return true;
@@ -14,6 +19,14 @@ function isHallucination(text: string): boolean {
   for (const s of sentences) {
     if (seen.has(s)) return true;
     seen.add(s);
+  }
+  // 패턴3: 단어 반복 — 같은 단어가 3회 이상 (ex: "러시아 러시아 러시아")
+  const words = text.split(/\s+/).filter((w) => w.length > 1);
+  const wordCount = new Map<string, number>();
+  for (const w of words) {
+    const cnt = (wordCount.get(w) ?? 0) + 1;
+    if (cnt >= 3) return true;
+    wordCount.set(w, cnt);
   }
   return false;
 }

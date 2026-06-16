@@ -194,7 +194,7 @@ function useWebSpeechVoice({ onResult, onInterim, onError }: Options) {
 
 const SAMPLE_RATE        = 16000;
 const CHUNK_INTERVAL_MS  = 5000;
-const SILENCE_MS         = 1200;   // 800→1200: 문장 중간 끊김 방지
+const SILENCE_MS         = 1500;   // 자연스러운 문장 내 쉼 허용
 const MIN_SPEECH_MS      = 300;    // 500→300: "네","아니요" 등 짧은 답변 캡처
 const NOISE_FLOOR_INIT   = 6;      // 초기 노이즈 플로어
 const NOISE_ADAPT_RATE   = 0.015;  // 환경 적응 속도
@@ -495,14 +495,13 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
         }
       }, 3000);
 
-      // 3초마다 자동 전송 — 녹음 중지 안 눌러도 실시간으로 텍스트 표시
+      // 5초마다 체크 — 7초 이상 연속 발화 시에만 강제 전송 (짧은 문장은 침묵 감지로 처리)
       chunkIntervalRef.current = setInterval(() => {
         if (!isListeningRef.current) return;
-        if (hasSpeechRef.current && totalSamplesRef.current > SAMPLE_RATE * (MIN_SPEECH_MS / 1000)) {
+        if (hasSpeechRef.current && totalSamplesRef.current > SAMPLE_RATE * 7) {
           if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
           void flush();
         } else if (!hasSpeechRef.current) {
-          // 발화 없이 소음만 쌓였으면 버퍼 버림
           pcmChunksRef.current = [];
           totalSamplesRef.current = 0;
         }
