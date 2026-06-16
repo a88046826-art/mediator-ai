@@ -2,13 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
-// Whisper/Groq 할루시네이션 감지: 완전히 동일한 단어가 반복되는 경우만 필터
-// (프롬프트 키워드 제거 후 실제 발화가 걸리는 오탐 방지)
+// Whisper 할루시네이션 감지: 불명확한 오디오에서 같은 문장을 반복 출력하는 현상 필터
 function isHallucination(text: string): boolean {
-  if (!text) return false;
-  // "기획, 개발, 디자인" 처럼 동일 패턴이 2회 이상 반복될 때만 필터
+  if (!text || text.length < 10) return false;
+  // 패턴1: 텍스트 전반부가 후반부에 그대로 반복 (단순 loop)
   const half = text.slice(0, Math.floor(text.length / 2));
-  return half.length > 10 && text.startsWith(half) && text.slice(half.length).trim().startsWith(half.trim()[0]);
+  if (half.length > 10 && text.slice(half.length).trimStart().startsWith(half.trimStart().slice(0, 8))) return true;
+  // 패턴2: 문장 단위 중복 — 같은 문장이 2번 이상 등장
+  const sentences = text.split(/(?<=[.。!?])\s+|,\s*/).map((s) => s.trim()).filter((s) => s.length > 8);
+  const seen = new Set<string>();
+  for (const s of sentences) {
+    if (seen.has(s)) return true;
+    seen.add(s);
+  }
+  return false;
 }
 
 async function transcribeWithRetry(
@@ -53,12 +60,10 @@ export async function POST(req: NextRequest) {
     if (groqKey) {
       const topic    = req.nextUrl.searchParams.get('topic') ?? '';
       const speakers = req.nextUrl.searchParams.get('speakers') ?? '';
-      const context  = req.nextUrl.searchParams.get('context') ?? ''; // 직전 인식 문장
-      const promptParts: string[] = [];
-      if (topic)    promptParts.push(`회의 주제: ${topic}.`);
+      const promptParts: string[] = ['한국어 팀 회의입니다.'];
+      if (topic)    promptParts.push(`주제: ${topic}.`);
       if (speakers) promptParts.push(`참가자: ${speakers}.`);
-      if (context)  promptParts.push(context); // 이전 문장을 프롬프트 끝에 → 연속 문맥 인식
-      const prompt = promptParts.join(' ') || '한국어로 진행되는 회의입니다.';
+      const prompt = promptParts.join(' ');
 
       const form = new FormData();
       form.append('file', new Blob([audio], { type: 'audio/wav' }), 'audio.wav');
@@ -85,12 +90,10 @@ export async function POST(req: NextRequest) {
     if (openaiKey) {
       const topic    = req.nextUrl.searchParams.get('topic') ?? '';
       const speakers = req.nextUrl.searchParams.get('speakers') ?? '';
-      const context  = req.nextUrl.searchParams.get('context') ?? '';
-      const promptParts: string[] = [];
-      if (topic)    promptParts.push(`회의 주제: ${topic}.`);
+      const promptParts: string[] = ['한국어 팀 회의입니다.'];
+      if (topic)    promptParts.push(`주제: ${topic}.`);
       if (speakers) promptParts.push(`참가자: ${speakers}.`);
-      if (context)  promptParts.push(context);
-      const prompt = promptParts.join(' ') || '한국어로 진행되는 회의입니다.';
+      const prompt = promptParts.join(' ');
 
       const form = new FormData();
       form.append('file', new Blob([audio], { type: 'audio/wav' }), 'audio.wav');

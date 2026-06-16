@@ -559,9 +559,9 @@ export default function AiPage() {
       return;
     }
     const now = Date.now();
-    // 1.5초 이내 동일 텍스트 중복 전송 방지 (auto-restart로 인한 재인식 방지)
+    // 8초 이내 동일 텍스트 중복 전송 방지 (Whisper hallucination 루프 방어)
     recentlySentRef.current.forEach((t, k) => {
-      if (now - t > 1500) recentlySentRef.current.delete(k);
+      if (now - t > 8000) recentlySentRef.current.delete(k);
     });
     if (recentlySentRef.current.has(text)) return;
     recentlySentRef.current.set(text, now);

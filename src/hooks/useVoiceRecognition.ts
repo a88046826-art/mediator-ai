@@ -299,9 +299,8 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
       setInterim('인식 중...');
       try {
         const params = new URLSearchParams();
-        if (meetingTopic)               params.set('topic',    meetingTopic);
-        if (meetingSpeakers)            params.set('speakers', meetingSpeakers);
-        if (lastTranscriptRef.current)  params.set('context',  lastTranscriptRef.current.slice(-120));
+        if (meetingTopic)   params.set('topic',    meetingTopic);
+        if (meetingSpeakers) params.set('speakers', meetingSpeakers);
         const abort = new AbortController();
         const timeoutId = setTimeout(() => abort.abort(), 15000);
         const res = await fetch(`/api/stt?${params}`, {
@@ -313,9 +312,11 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
         clearTimeout(timeoutId);
         if (res.ok) {
           const { text } = await res.json() as { text: string };
-          if (text?.trim()) {
-            lastTranscriptRef.current = text.trim();
-            onResultRef.current(text.trim());
+          const trimmed = text?.trim();
+          // 직전 결과와 동일하면 hallucination으로 간주하고 드롭
+          if (trimmed && trimmed !== lastTranscriptRef.current) {
+            lastTranscriptRef.current = trimmed;
+            onResultRef.current(trimmed);
           }
         } else if (res.status === 500) {
           const { error } = await res.json() as { error: string };
