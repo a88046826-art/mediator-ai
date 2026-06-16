@@ -198,7 +198,7 @@ const SILENCE_MS         = 1500;   // 자연스러운 문장 내 쉼 허용
 const MIN_SPEECH_MS      = 300;    // 500→300: "네","아니요" 등 짧은 답변 캡처
 const NOISE_FLOOR_INIT   = 6;      // 초기 노이즈 플로어
 const NOISE_ADAPT_RATE   = 0.015;  // 환경 적응 속도
-const SPEECH_RATIO       = 3.5;    // 노이즈 플로어의 몇 배여야 말소리로 판단
+const SPEECH_RATIO       = 4.5;    // 노이즈 플로어의 몇 배여야 말소리로 판단 (멀리서 들리는 불명확한 소리 차단)
 const NOISE_FLOOR_MIN    = 3;
 const NOISE_FLOOR_MAX    = 18;
 
