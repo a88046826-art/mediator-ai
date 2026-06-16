@@ -275,7 +275,8 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
   const silenceTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chunkIntervalRef  = useRef<ReturnType<typeof setInterval> | null>(null);
   const heartbeatRef      = useRef<ReturnType<typeof setInterval> | null>(null);
-  const isSendingRef      = useRef(false);
+  const sendQueueRef      = useRef<Int16Array[]>([]);
+  const isProcessingRef   = useRef(false);
   const hasSpeechRef      = useRef(false);
   const noiseFloorRef     = useRef(NOISE_FLOOR_INIT);
   const warmupFramesRef   = useRef(0);
@@ -289,15 +290,45 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
     onInterimRef.current?.(text);
   }, []);
 
-  const flush = useCallback(async () => {
-    // 전송 중이면 완료 후 재시도 (발화 손실 방지)
-    if (isSendingRef.current) {
-      if (!silenceTimerRef.current) {
-        silenceTimerRef.current = setTimeout(() => { silenceTimerRef.current = null; void flush(); }, 300);
-      }
-      return;
+  // 큐에 쌓인 오디오 세그먼트를 하나씩 순서대로 Groq에 전송
+  const processQueue = useCallback(async () => {
+    if (isProcessingRef.current) return;
+    isProcessingRef.current = true;
+    while (sendQueueRef.current.length > 0) {
+      const processed = sendQueueRef.current.shift()!;
+      setInterim('인식 중...');
+      try {
+        const params = new URLSearchParams();
+        if (meetingTopic)               params.set('topic',    meetingTopic);
+        if (meetingSpeakers)            params.set('speakers', meetingSpeakers);
+        if (lastTranscriptRef.current)  params.set('context',  lastTranscriptRef.current.slice(-120));
+        const abort = new AbortController();
+        const timeoutId = setTimeout(() => abort.abort(), 15000);
+        const res = await fetch(`/api/stt?${params}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'audio/wav' },
+          body: encodeWAV(processed, SAMPLE_RATE),
+          signal: abort.signal,
+        });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          const { text } = await res.json() as { text: string };
+          if (text?.trim()) {
+            lastTranscriptRef.current = text.trim();
+            onResultRef.current(text.trim());
+          }
+        } else if (res.status === 500) {
+          const { error } = await res.json() as { error: string };
+          if (error === 'STT not configured') onErrorRef.current?.('CLOVA 환경변수를 설정해 주세요.');
+        }
+      } catch { /* 네트워크 순단 — 해당 세그먼트 드롭하고 다음으로 */ }
     }
-    // 실제 발화가 없었으면 버퍼만 비우고 전송 안 함 (소음 hallucination 방지)
+    isProcessingRef.current = false;
+    setInterim('');
+  }, [setInterim, meetingTopic, meetingSpeakers]);
+
+  // 발화 종료 시: 현재 PCM을 즉시 스냅샷해서 큐에 넣고 전송 시작
+  const flush = useCallback(() => {
     if (!hasSpeechRef.current) {
       pcmChunksRef.current = [];
       totalSamplesRef.current = 0;
@@ -313,38 +344,9 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
     let off = 0;
     for (const c of chunks) { combined.set(c, off); off += c.length; }
 
-    const processed = normalize(combined);
-
-    isSendingRef.current = true;
-    setInterim('인식 중...');
-    try {
-      const params = new URLSearchParams();
-      if (meetingTopic)               params.set('topic',    meetingTopic);
-      if (meetingSpeakers)            params.set('speakers', meetingSpeakers);
-      if (lastTranscriptRef.current)  params.set('context',  lastTranscriptRef.current.slice(-120));
-      const url = `/api/stt?${params}`;
-      const abort = new AbortController();
-      const timeoutId = setTimeout(() => abort.abort(), 15000); // Groq hang 방지
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'audio/wav' },
-        body: encodeWAV(processed, SAMPLE_RATE),
-        signal: abort.signal,
-      });
-      clearTimeout(timeoutId);
-      if (res.ok) {
-        const { text } = await res.json() as { text: string };
-        if (text?.trim()) {
-          lastTranscriptRef.current = text.trim();
-          onResultRef.current(text.trim());
-        }
-      } else if (res.status === 500) {
-        const { error } = await res.json() as { error: string };
-        if (error === 'STT not configured') onErrorRef.current?.('CLOVA 환경변수를 설정해 주세요.');
-      }
-    } catch { /* 네트워크 순단 */ }
-    finally { isSendingRef.current = false; setInterim(''); }
-  }, [setInterim]);
+    sendQueueRef.current.push(normalize(combined));
+    void processQueue();
+  }, [processQueue]);
 
   const scheduleFlush = useCallback(() => {
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
@@ -464,6 +466,7 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
       pcmChunksRef.current = []; totalSamplesRef.current = 0; hasSpeechRef.current = false;
       noiseFloorRef.current = NOISE_FLOOR_INIT; warmupFramesRef.current = 0;
       lastTranscriptRef.current = '';
+      sendQueueRef.current = []; isProcessingRef.current = false;
       isListeningRef.current = true;
       setIsListening(true);
 
@@ -493,7 +496,7 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
 
       // 3초마다 자동 전송 — 녹음 중지 안 눌러도 실시간으로 텍스트 표시
       chunkIntervalRef.current = setInterval(() => {
-        if (!isListeningRef.current || isSendingRef.current) return;
+        if (!isListeningRef.current) return;
         if (hasSpeechRef.current && totalSamplesRef.current > SAMPLE_RATE * (MIN_SPEECH_MS / 1000)) {
           if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
           void flush();
