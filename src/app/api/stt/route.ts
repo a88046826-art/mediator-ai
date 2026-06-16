@@ -36,6 +36,15 @@ async function transcribeWithRetry(
   return last!;
 }
 
+export async function GET() {
+  return NextResponse.json({
+    groq:  !!process.env.GROQ_API_KEY,
+    openai: !!process.env.OPENAI_API_KEY,
+    clova: !!process.env.CLOVA_SPEECH_SECRET,
+    csr:   !!(process.env.CLOVA_CLIENT_ID && process.env.CLOVA_CLIENT_SECRET),
+  });
+}
+
 export async function POST(req: NextRequest) {
   const groqKey      = process.env.GROQ_API_KEY;
   const openaiKey    = process.env.OPENAI_API_KEY;
