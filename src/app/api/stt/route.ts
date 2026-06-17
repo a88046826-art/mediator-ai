@@ -80,10 +80,12 @@ export async function POST(req: NextRequest) {
 
     // 1순위: Groq Whisper (whisper-large-v3-turbo — 더 정확, 10배 빠름)
     if (groqKey) {
+      const speakers = req.nextUrl.searchParams.get('speakers') ?? '';
       const form = new FormData();
       form.append('file', new Blob([audio], { type: 'audio/wav' }), 'audio.wav');
       form.append('model', 'whisper-large-v3-turbo');
       form.append('language', 'ko');
+      form.append('response_format', 'verbose_json');
       form.append('prompt', speakers ? `한국어 팀 회의입니다. 참가자: ${speakers}.` : '한국어 팀 회의입니다.');
 
       const res = await transcribeWithRetry(
@@ -95,8 +97,16 @@ export async function POST(req: NextRequest) {
         const body = await res.text().catch(() => '');
         throw new Error(`Groq ${res.status}: ${body}`);
       }
-      const data = await res.json() as { text?: string };
+      const data = await res.json() as {
+        text?: string;
+        segments?: Array<{ no_speech_prob?: number; avg_logprob?: number }>;
+      };
       const text = (data.text ?? '').trim();
+      // no_speech_prob 체크: 세그먼트 평균이 0.5 이상이면 말소리 없는 오디오
+      if (data.segments && data.segments.length > 0) {
+        const avgNoSpeech = data.segments.reduce((s, seg) => s + (seg.no_speech_prob ?? 0), 0) / data.segments.length;
+        if (avgNoSpeech > 0.5) return NextResponse.json({ text: '' });
+      }
       if (isHallucination(text)) return NextResponse.json({ text: '' });
       return NextResponse.json({ text });
     }
