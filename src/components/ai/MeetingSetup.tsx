@@ -152,8 +152,9 @@ export function MeetingSetup({ members, onStart }: Props) {
       } else {
         setSuggestion(result);
       }
-    } catch {
-      setSuggestError('추천을 불러오는 데 실패했어요. 잠시 후 다시 시도해 주세요.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '';
+      setSuggestError(msg ? `추천 실패: ${msg}` : '추천을 불러오는 데 실패했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
       setIsFetching(false);
     }
