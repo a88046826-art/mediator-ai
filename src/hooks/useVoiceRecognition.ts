@@ -194,13 +194,13 @@ function useWebSpeechVoice({ onResult, onInterim, onError }: Options) {
 
 const SAMPLE_RATE        = 16000;
 const CHUNK_INTERVAL_MS  = 5000;
-const SILENCE_MS         = 1500;   // 자연스러운 문장 내 쉼 허용
-const MIN_SPEECH_MS      = 300;    // 500→300: "네","아니요" 등 짧은 답변 캡처
+const SILENCE_MS         = 1200;   // 1500→1200: 여러 명 대화 시 더 빠른 청크 분리
+const MIN_SPEECH_MS      = 300;    // "네","아니요" 등 짧은 답변 캡처
 const NOISE_FLOOR_INIT   = 6;      // 초기 노이즈 플로어
 const NOISE_ADAPT_RATE   = 0.015;  // 환경 적응 속도
-const SPEECH_RATIO       = 4.0;    // 노이즈 플로어의 몇 배여야 말소리로 판단
+const SPEECH_RATIO       = 3.0;    // 4.0→3.0: 여러 명 있는 환경에서도 발화 감지
 const NOISE_FLOOR_MIN    = 3;
-const NOISE_FLOOR_MAX    = 18;
+const NOISE_FLOOR_MAX    = 15;     // 18→15: 시끄러운 환경에서 threshold 과상승 방지
 
 // 디바이스 실제 샘플레이트 → 16000Hz 다운샘플 (선형 보간)
 function resampleTo16k(input: Float32Array, fromRate: number): Int16Array {
@@ -453,8 +453,8 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
 
         warmupFramesRef.current++;
 
-        // 처음 25프레임(~6초)은 노이즈 플로어 캘리브레이션만 수행
-        if (warmupFramesRef.current <= 25) {
+        // 처음 10프레임(~2.5초)은 노이즈 플로어 캘리브레이션만 수행
+        if (warmupFramesRef.current <= 10) {
           noiseFloorRef.current = noiseFloorRef.current * (1 - NOISE_ADAPT_RATE) + rms * NOISE_ADAPT_RATE;
           noiseFloorRef.current = Math.max(NOISE_FLOOR_MIN, Math.min(NOISE_FLOOR_MAX, noiseFloorRef.current));
           return;
@@ -518,10 +518,10 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
         }
       }, 3000);
 
-      // 5초마다 체크 — 7초 이상 연속 발화 시에만 강제 전송 (짧은 문장은 침묵 감지로 처리)
+      // 5초마다 체크 — 5초 이상 연속 발화 시 강제 전송 (여러 명 환경에서 청크 적절히 분리)
       chunkIntervalRef.current = setInterval(() => {
         if (!isListeningRef.current) return;
-        if (hasSpeechRef.current && totalSamplesRef.current > SAMPLE_RATE * 7) {
+        if (hasSpeechRef.current && totalSamplesRef.current > SAMPLE_RATE * 5) {
           if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
           void flush();
         } else if (!hasSpeechRef.current) {
