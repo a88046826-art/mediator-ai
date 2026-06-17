@@ -137,6 +137,10 @@ export async function POST(req: NextRequest) {
         body: audio,
       });
       if (!res.ok) throw new Error(`CLOVA ${res.status}`);
+      // Cloudflare 봇 차단 시 HTML 반환 — JSON 아니면 빈 결과로 처리
+      if (!(res.headers.get('content-type') ?? '').includes('application/json')) {
+        return NextResponse.json({ text: '' });
+      }
       const data = await res.json() as { text?: string };
       return NextResponse.json({ text: data.text ?? '' });
     }
@@ -152,6 +156,9 @@ export async function POST(req: NextRequest) {
       body: audio,
     });
     if (!res.ok) throw new Error(`CSR ${res.status}`);
+    if (!(res.headers.get('content-type') ?? '').includes('application/json')) {
+      return NextResponse.json({ text: '' });
+    }
     const data = await res.json() as { text?: string };
     return NextResponse.json({ text: data.text ?? '' });
 
