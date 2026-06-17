@@ -304,8 +304,10 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
   const noiseFloorRef     = useRef(NOISE_FLOOR_INIT);
   const warmupFramesRef   = useRef(0);
   const lastInterimRef    = useRef('');
-  const lastTranscriptRef = useRef('');         // 직전 인식 결과 → Whisper 문맥 프롬프트
-  const visibilityHandlerRef = useRef<(() => void) | null>(null); // AudioContext 재개용
+  const lastTranscriptRef = useRef('');
+  const lastFrameRef      = useRef(0);          // 마지막 오디오 프레임 수신 시각
+  const startRef          = useRef<() => Promise<void>>(async () => {});  // 자동 재시작용
+  const visibilityHandlerRef = useRef<(() => void) | null>(null);
 
   const setInterim = useCallback((text: string) => {
     if (text === lastInterimRef.current) return;
@@ -426,7 +428,11 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
       });
       streamRef.current = stream;
       stream.getAudioTracks()[0].addEventListener('ended', () => {
-        if (isListeningRef.current) { stop(); onErrorRef.current?.('마이크 연결이 끊겼습니다. 다시 시작해 주세요.'); }
+        if (!isListeningRef.current) return;
+        // 마이크 트랙 종료 → 자동 재시작 (Android에서 알림음 등으로 잠깐 끊길 때)
+        isListeningRef.current = false;
+        teardown();
+        setTimeout(() => { void startRef.current(); }, 800);
       });
 
       // Resume again in case the context ended up suspended after the async getUserMedia call
@@ -440,6 +446,7 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
 
       workletNode.port.onmessage = (e: MessageEvent<Float32Array>) => {
         if (!isListeningRef.current) return;
+        lastFrameRef.current = Date.now(); // 워치독용 타임스탬프
         const input = e.data;
         // 실제 샘플레이트 → 16000Hz 다운샘플 (48000Hz 기기 대응)
         const pcm = resampleTo16k(input, actualSampleRate.current);
@@ -505,18 +512,32 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
 
       // AudioContext statechange 감지: 알림음·화면잠금 등으로 suspend돼도 즉시 resume
       ctx.addEventListener('statechange', () => {
-        if (audioCtxRef.current?.state === 'suspended' && isListeningRef.current) {
-          audioCtxRef.current.resume().catch(() => {});
-        }
+        if (!isListeningRef.current || audioCtxRef.current?.state !== 'suspended') return;
+        audioCtxRef.current.resume().catch(() => {
+          // resume 실패 시 전체 재시작
+          if (isListeningRef.current) {
+            isListeningRef.current = false;
+            teardown();
+            setTimeout(() => { void startRef.current(); }, 1000);
+          }
+        });
       });
 
-      // 3초마다 AudioContext 상태 체크 heartbeat (statechange 미발화 대비)
+      // 1초마다 상태 체크 + 워치독 (statechange 미발화 대비)
       heartbeatRef.current = setInterval(() => {
         if (!isListeningRef.current) return;
+        // AudioContext 정지 시 즉시 resume
         if (audioCtxRef.current?.state === 'suspended') {
           audioCtxRef.current.resume().catch(() => {});
         }
-      }, 3000);
+        // 워치독: 5초 이상 오디오 프레임 없으면 전체 재시작
+        if (lastFrameRef.current > 0 && Date.now() - lastFrameRef.current > 5000) {
+          lastFrameRef.current = 0;
+          isListeningRef.current = false;
+          teardown();
+          setTimeout(() => { void startRef.current(); }, 500);
+        }
+      }, 1000);
 
       // 5초마다 체크 — 5초 이상 연속 발화 시 강제 전송 (여러 명 환경에서 청크 적절히 분리)
       chunkIntervalRef.current = setInterval(() => {
@@ -537,6 +558,9 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
   }, [scheduleFlush, setInterim, stop]);
 
   const toggle = useCallback(() => { isListeningRef.current ? stop() : start(); }, [start, stop]);
+
+  // startRef 항상 최신 유지 (자동 재시작 클로저에서 사용)
+  useEffect(() => { startRef.current = start; }, [start]);
 
   useEffect(() => {
     return () => { isListeningRef.current = false; if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current); teardown(); };
