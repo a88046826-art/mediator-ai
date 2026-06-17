@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Nav } from '@/components/layout/Nav';
 import { Toast } from '@/components/layout/Toast';
+import { ThemeApplier } from '@/components/layout/ThemeApplier';
 
 export const metadata: Metadata = {
   title: 'MEDIATOR | AI 실시간 회의 중재자',
@@ -11,7 +12,14 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
+      <head>
+        {/* FOUC 방지: 페이지 렌더 전에 저장된 테마 적용 */}
+        <script dangerouslySetInnerHTML={{ __html: `
+          (function(){try{var s=localStorage.getItem('mediator-ai-store');if(s){var d=JSON.parse(s);if(d.state&&d.state.theme==='meditor'){document.documentElement.setAttribute('data-theme','meditor');}}}catch(e){}})();
+        ` }} />
+      </head>
       <body>
+        <ThemeApplier />
         <Nav />
         <main className="pt-16 min-h-screen">{children}</main>
         <Toast />

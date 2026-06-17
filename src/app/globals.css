@@ -4,6 +4,44 @@
 
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
 
+/* ── 테마 CSS 변수 ────────────────────────────────────────────────── */
+
+:root {
+  /* Dark 테마 (기본) */
+  --c-bg:       10 10 20;        /* #0a0a14 */
+  --c-surface:  18 18 30;        /* #12121e */
+  --c-surface2: 26 26 46;        /* #1a1a2e */
+  --c-surface3: 31 31 53;        /* #1f1f35 */
+  --c-accent:   124 58 237;      /* #7c3aed */
+  --c-accent2:  6 182 212;       /* #06b6d4 */
+  --c-accent3:  16 185 129;      /* #10b981 */
+  --c-accent4:  245 158 11;      /* #f59e0b */
+  --c-border:   rgba(167, 139, 250, 0.12);
+  --c-text:     226 232 240;     /* #e2e8f0 */
+  --c-scrollbar-track: #12121e;
+  --c-scrollbar-thumb: rgba(124, 58, 237, 0.4);
+  --c-scrollbar-hover: rgba(124, 58, 237, 0.7);
+}
+
+[data-theme="meditor"] {
+  /* Meditor 라이트 테마 */
+  --c-bg:       245 247 255;     /* #f5f7ff */
+  --c-surface:  255 255 255;     /* #ffffff */
+  --c-surface2: 238 242 255;     /* #eef2ff */
+  --c-surface3: 224 232 255;     /* #e0e8ff */
+  --c-accent:   79 142 247;      /* #4f8ef7 */
+  --c-accent2:  6 194 245;       /* #06c2f5 */
+  --c-accent3:  16 185 129;      /* same */
+  --c-accent4:  245 158 11;      /* same */
+  --c-border:   rgba(79, 142, 247, 0.2);
+  --c-text:     13 27 75;        /* #0d1b4b */
+  --c-scrollbar-track: #eef2ff;
+  --c-scrollbar-thumb: rgba(79, 142, 247, 0.35);
+  --c-scrollbar-hover: rgba(79, 142, 247, 0.6);
+}
+
+/* ── 기본 스타일 ──────────────────────────────────────────────────── */
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -12,26 +50,53 @@
 
 html,
 body {
-  background-color: #0a0a14;
-  color: #e2e8f0;
+  background-color: rgb(var(--c-bg));
+  color: rgb(var(--c-text));
   font-family: 'Pretendard', 'Apple SD Gothic Neo', -apple-system, sans-serif;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
-::-webkit-scrollbar {
-  width: 6px;
+::-webkit-scrollbar        { width: 6px; }
+::-webkit-scrollbar-track  { background: var(--c-scrollbar-track); }
+::-webkit-scrollbar-thumb  { background: var(--c-scrollbar-thumb); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--c-scrollbar-hover); }
+
+/* ── Meditor 테마 텍스트 색상 오버라이드 ─────────────────────────── */
+
+[data-theme="meditor"] .text-slate-50,
+[data-theme="meditor"] .text-slate-100,
+[data-theme="meditor"] .text-slate-200 { color: #0d1b4b; }
+
+[data-theme="meditor"] .text-slate-300  { color: #1e3a5f; }
+[data-theme="meditor"] .text-slate-400  { color: #4b5e8c; }
+[data-theme="meditor"] .text-slate-500,
+[data-theme="meditor"] .text-slate-600  { color: #6b7fa8; }
+
+[data-theme="meditor"] .placeholder-slate-500::placeholder { color: #8fa3c7; }
+
+/* ── Meditor 테마 컴포넌트 오버라이드 ────────────────────────────── */
+
+[data-theme="meditor"] .btn-primary {
+  background: linear-gradient(135deg, rgb(var(--c-accent)), rgb(var(--c-accent2)));
+  color: #ffffff;
 }
-::-webkit-scrollbar-track {
-  background: #12121e;
+[data-theme="meditor"] .btn-primary:hover {
+  background: linear-gradient(135deg, rgb(var(--c-accent) / 0.88), rgb(var(--c-accent2) / 0.88));
 }
-::-webkit-scrollbar-thumb {
-  background: rgba(124, 58, 237, 0.4);
-  border-radius: 3px;
+[data-theme="meditor"] .btn-secondary {
+  color: #1e3a5f;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(124, 58, 237, 0.7);
+[data-theme="meditor"] .glass {
+  background: rgba(79, 142, 247, 0.06);
+  border-color: rgba(79, 142, 247, 0.15);
 }
+[data-theme="meditor"] .input-base {
+  color: #0d1b4b;
+}
+
+/* ── Tailwind 컴포넌트 레이어 ─────────────────────────────────────── */
 
 @layer components {
   .btn-primary {

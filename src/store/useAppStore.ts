@@ -16,6 +16,7 @@ interface AppState {
   meetingContext: string;
   meetingHistory: MeetingRecord[];
   toast: Toast | null;
+  theme: 'dark' | 'meditor';
 
   addTeamMember: (member: TeamMember) => void;
   removeTeamMember: (id: string) => void;
@@ -31,6 +32,8 @@ interface AppState {
 
   showToast: (message: string, type?: Toast['type']) => void;
   hideToast: () => void;
+
+  setTheme: (theme: 'dark' | 'meditor') => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -41,6 +44,7 @@ export const useAppStore = create<AppState>()(
       meetingContext: '',
       meetingHistory: [],
       toast: null,
+      theme: 'dark',
 
       addTeamMember: (member) =>
         set((s) => ({
@@ -76,12 +80,15 @@ export const useAppStore = create<AppState>()(
         setTimeout(() => set({ toast: null }), 3000);
       },
       hideToast: () => set({ toast: null }),
+
+      setTheme: (theme) => set({ theme }),
     }),
     {
       name: 'mediator-ai-store',
       partialize: (s) => ({
         teamMembers: s.teamMembers,
         meetingHistory: s.meetingHistory,
+        theme: s.theme,
       }),
     }
   )
