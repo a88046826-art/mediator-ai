@@ -236,6 +236,16 @@ function trimSilence(samples: Int16Array, threshold = 150): Int16Array {
   return samples.slice(start, end + 1);
 }
 
+// Pre-emphasis 필터: 고주파(자음) 강조 — y[n] = x[n] - 0.97 * x[n-1]
+function preEmphasis(samples: Int16Array): Int16Array {
+  const out = new Int16Array(samples.length);
+  out[0] = samples[0];
+  for (let i = 1; i < samples.length; i++) {
+    out[i] = Math.max(-32768, Math.min(32767, Math.round(samples[i] - 0.97 * samples[i - 1])));
+  }
+  return out;
+}
+
 // 볼륨 정규화: 최대 진폭을 목표값(0.7)으로 스케일
 function normalize(samples: Int16Array): Int16Array {
   let max = 0;
@@ -358,7 +368,7 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
     let off = 0;
     for (const c of chunks) { combined.set(c, off); off += c.length; }
 
-    sendQueueRef.current.push(normalize(trimSilence(combined)));
+    sendQueueRef.current.push(normalize(preEmphasis(trimSilence(combined))));
     void processQueue();
   }, [processQueue]);
 
