@@ -223,6 +223,19 @@ function resampleTo16k(input: Float32Array, fromRate: number): Int16Array {
   return out;
 }
 
+// 앞뒤 무음 제거: 임계값 이하 샘플을 앞뒤에서 잘라내고 50ms 패딩 유지
+function trimSilence(samples: Int16Array, threshold = 150): Int16Array {
+  const PADDING = Math.floor(SAMPLE_RATE * 0.05); // 50ms padding
+  let start = 0;
+  let end = samples.length - 1;
+  while (start < samples.length && Math.abs(samples[start]) < threshold) start++;
+  while (end > start && Math.abs(samples[end]) < threshold) end--;
+  if (start >= end) return samples; // 전부 무음이면 원본 반환 (hallucination 필터가 처리)
+  start = Math.max(0, start - PADDING);
+  end = Math.min(samples.length - 1, end + PADDING);
+  return samples.slice(start, end + 1);
+}
+
 // 볼륨 정규화: 최대 진폭을 목표값(0.7)으로 스케일
 function normalize(samples: Int16Array): Int16Array {
   let max = 0;
@@ -345,7 +358,7 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
     let off = 0;
     for (const c of chunks) { combined.set(c, off); off += c.length; }
 
-    sendQueueRef.current.push(normalize(combined));
+    sendQueueRef.current.push(normalize(trimSilence(combined)));
     void processQueue();
   }, [processQueue]);
 
