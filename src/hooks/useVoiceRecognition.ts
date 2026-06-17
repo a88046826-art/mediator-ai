@@ -198,9 +198,9 @@ const SILENCE_MS         = 1200;   // 1500→1200: 여러 명 대화 시 더 빠
 const MIN_SPEECH_MS      = 300;    // "네","아니요" 등 짧은 답변 캡처
 const NOISE_FLOOR_INIT   = 6;      // 초기 노이즈 플로어
 const NOISE_ADAPT_RATE   = 0.015;  // 환경 적응 속도
-const SPEECH_RATIO       = 3.0;    // 4.0→3.0: 여러 명 있는 환경에서도 발화 감지
+const SPEECH_RATIO       = 3.5;    // 잡음 억제(4.0)와 다인 환경 감도(3.0) 절충
 const NOISE_FLOOR_MIN    = 3;
-const NOISE_FLOOR_MAX    = 15;     // 18→15: 시끄러운 환경에서 threshold 과상승 방지
+const NOISE_FLOOR_MAX    = 15;     // 시끄러운 환경에서 threshold 과상승 방지
 
 // 디바이스 실제 샘플레이트 → 16000Hz 다운샘플 (선형 보간)
 function resampleTo16k(input: Float32Array, fromRate: number): Int16Array {
