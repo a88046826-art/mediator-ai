@@ -102,10 +102,10 @@ export async function POST(req: NextRequest) {
         segments?: Array<{ no_speech_prob?: number; avg_logprob?: number }>;
       };
       const text = (data.text ?? '').trim();
-      // no_speech_prob 체크: 세그먼트 평균이 0.5 이상이면 말소리 없는 오디오
+      // no_speech_prob 체크: 세그먼트 평균이 0.65 이상이면 말소리 없는 오디오
       if (data.segments && data.segments.length > 0) {
         const avgNoSpeech = data.segments.reduce((s, seg) => s + (seg.no_speech_prob ?? 0), 0) / data.segments.length;
-        if (avgNoSpeech > 0.5) return NextResponse.json({ text: '' });
+        if (avgNoSpeech > 0.65) return NextResponse.json({ text: '' });
       }
       if (isHallucination(text)) return NextResponse.json({ text: '' });
       return NextResponse.json({ text });
