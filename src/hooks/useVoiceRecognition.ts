@@ -194,13 +194,13 @@ function useWebSpeechVoice({ onResult, onInterim, onError }: Options) {
 
 const SAMPLE_RATE        = 16000;
 const CHUNK_INTERVAL_MS  = 5000;
-const SILENCE_MS         = 1200;   // 1500→1200: 여러 명 대화 시 더 빠른 청크 분리
-const MIN_SPEECH_MS      = 300;    // "네","아니요" 등 짧은 답변 캡처
-const NOISE_FLOOR_INIT   = 6;      // 초기 노이즈 플로어
-const NOISE_ADAPT_RATE   = 0.015;  // 환경 적응 속도
-const SPEECH_RATIO       = 3.5;    // 잡음 억제(4.0)와 다인 환경 감도(3.0) 절충
+const SILENCE_MS         = 1200;
+const MIN_SPEECH_MS      = 200;    // 300→200: 짧은 단어("네","맞아") 누락 방지
+const NOISE_FLOOR_INIT   = 6;
+const NOISE_ADAPT_RATE   = 0.015;
+const SPEECH_RATIO       = 3.2;    // 3.5→3.2: 조금 더 작은 소리도 감지
 const NOISE_FLOOR_MIN    = 3;
-const NOISE_FLOOR_MAX    = 15;     // 시끄러운 환경에서 threshold 과상승 방지
+const NOISE_FLOOR_MAX    = 15;
 
 // 디바이스 실제 샘플레이트 → 16000Hz 다운샘플 (선형 보간)
 function resampleTo16k(input: Float32Array, fromRate: number): Int16Array {
@@ -324,8 +324,10 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
       setInterim('인식 중...');
       try {
         const params = new URLSearchParams();
-        if (meetingTopic)   params.set('topic',    meetingTopic);
+        if (meetingTopic)    params.set('topic',    meetingTopic);
         if (meetingSpeakers) params.set('speakers', meetingSpeakers);
+        // 직전 인식 결과를 Whisper 문맥 프롬프트로 전달 (고유명사·맥락 정확도 향상)
+        if (lastTranscriptRef.current) params.set('context', lastTranscriptRef.current.slice(-80));
         const abort = new AbortController();
         const timeoutId = setTimeout(() => abort.abort(), 15000);
         const res = await fetch(`/api/stt?${params}`, {
@@ -460,8 +462,8 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
 
         warmupFramesRef.current++;
 
-        // 처음 10프레임(~2.5초)은 노이즈 플로어 캘리브레이션만 수행
-        if (warmupFramesRef.current <= 10) {
+        // 처음 6프레임(~1.5초)은 노이즈 플로어 캘리브레이션만 수행
+        if (warmupFramesRef.current <= 6) {
           noiseFloorRef.current = noiseFloorRef.current * (1 - NOISE_ADAPT_RATE) + rms * NOISE_ADAPT_RATE;
           noiseFloorRef.current = Math.max(NOISE_FLOOR_MIN, Math.min(NOISE_FLOOR_MAX, noiseFloorRef.current));
           return;

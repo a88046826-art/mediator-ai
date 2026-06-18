@@ -81,12 +81,18 @@ export async function POST(req: NextRequest) {
     // 1순위: Groq Whisper (whisper-large-v3-turbo — 더 정확, 10배 빠름)
     if (groqKey) {
       const speakers = req.nextUrl.searchParams.get('speakers') ?? '';
+      const context  = req.nextUrl.searchParams.get('context')  ?? '';
+      const basePrompt = speakers
+        ? `한국어 팀 회의입니다. 참가자: ${speakers}.`
+        : '한국어 팀 회의입니다.';
+      // 직전 발화를 프롬프트 끝에 붙여 Whisper가 맥락·고유명사를 더 정확히 인식
+      const prompt = context ? `${basePrompt} ${context}` : basePrompt;
       const form = new FormData();
       form.append('file', new Blob([audio], { type: 'audio/wav' }), 'audio.wav');
       form.append('model', 'whisper-large-v3-turbo');
       form.append('language', 'ko');
       form.append('response_format', 'verbose_json');
-      form.append('prompt', speakers ? `한국어 팀 회의입니다. 참가자: ${speakers}.` : '한국어 팀 회의입니다.');
+      form.append('prompt', prompt);
 
       const res = await transcribeWithRetry(
         'https://api.groq.com/openai/v1/audio/transcriptions',
