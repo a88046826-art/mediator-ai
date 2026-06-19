@@ -3,6 +3,7 @@ import './globals.css';
 import { Nav } from '@/components/layout/Nav';
 import { Toast } from '@/components/layout/Toast';
 import { ThemeApplier } from '@/components/layout/ThemeApplier';
+import { Analytics } from '@vercel/analytics/react';
 
 export const metadata: Metadata = {
   title: 'MEDIATOR | AI 실시간 회의 중재자',
@@ -19,6 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         ` }} />
       </head>
       <body>
+        <Analytics />
         <ThemeApplier />
         <Nav />
         <main className="pt-16 min-h-screen">{children}</main>
