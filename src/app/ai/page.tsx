@@ -461,15 +461,14 @@ export default function AiPage() {
     const latest = entries[entries.length - 1];
     if (latest && latest.id !== lastUrgentEntryIdRef.current && latest.text.length >= 8) {
       lastUrgentEntryIdRef.current = latest.id;
-      if (entries.length % 2 === 0) runUrgentCheck(entries);
+      if (entries.length % 3 === 0) runUrgentCheck(entries);
     }
 
-    // 일반 분석: 3개 60자 이상, 또는 8개 쌓이면 (2/40 → 3/60)
     const newEntries = entries.slice(lastAnalyzedCountRef.current);
     const newCharCount = newEntries.reduce((sum, e) => sum + e.text.length, 0);
     const shouldAnalyze =
-      (newEntries.length >= 3 && newCharCount >= 60) ||
-      newEntries.length >= 8;
+      (newEntries.length >= 4 && newCharCount >= 80) ||
+      newEntries.length >= 10;
     if (shouldAnalyze) {
       lastAnalyzedCountRef.current = entries.length;
       runAnalysis(entries);
