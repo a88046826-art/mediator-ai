@@ -457,19 +457,19 @@ export default function AiPage() {
     const entries = sessionState.transcript;
     if (entries.length === 0) return;
 
-    // Urgent check on new entry (host only)
+    // 긴급 체크: 2개마다 (매 발화 → 절반으로 줄여 API 절약)
     const latest = entries[entries.length - 1];
     if (latest && latest.id !== lastUrgentEntryIdRef.current && latest.text.length >= 8) {
       lastUrgentEntryIdRef.current = latest.id;
-      runUrgentCheck(entries);
+      if (entries.length % 2 === 0) runUrgentCheck(entries);
     }
 
-    // 글자 수 기반 트리거: "네" "응" 같은 짧은 답변 3개론 트리거 안 됨
+    // 일반 분석: 3개 60자 이상, 또는 8개 쌓이면 (2/40 → 3/60)
     const newEntries = entries.slice(lastAnalyzedCountRef.current);
     const newCharCount = newEntries.reduce((sum, e) => sum + e.text.length, 0);
     const shouldAnalyze =
-      (newEntries.length >= 2 && newCharCount >= 40) || // 의미있는 내용 2개 이상
-      newEntries.length >= 6;                           // 짧더라도 6개 쌓이면 분석
+      (newEntries.length >= 3 && newCharCount >= 60) ||
+      newEntries.length >= 8;
     if (shouldAnalyze) {
       lastAnalyzedCountRef.current = entries.length;
       runAnalysis(entries);
