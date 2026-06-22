@@ -194,7 +194,7 @@ function useWebSpeechVoice({ onResult, onInterim, onError }: Options) {
 
 const SAMPLE_RATE        = 16000;
 const CHUNK_INTERVAL_MS  = 5000;
-const SILENCE_MS         = 1200;
+const SILENCE_MS         = 1500;
 const MIN_SPEECH_MS      = 200;    // 300→200: 짧은 단어("네","맞아") 누락 방지
 const NOISE_FLOOR_INIT   = 6;
 const NOISE_ADAPT_RATE   = 0.015;
