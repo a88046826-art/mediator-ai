@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 const ALLOWED_ORIGINS = [
   'https://mediator-ai-eight.vercel.app',
@@ -20,6 +21,16 @@ export async function POST(req: NextRequest) {
     origin.endsWith('.vercel.app');
   if (!isAllowed) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  // Rate limit: 20 AI requests/min per IP (frontend triggers ~5–10/min max in normal use)
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown';
+  const rl = checkRateLimit(ip, 'chat', 20);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } },
+    );
   }
 
   try {

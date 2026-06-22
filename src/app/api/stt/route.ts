@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
@@ -59,6 +60,16 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  // Rate limit: 30 STT requests/min per IP (5s chunks → max ~12/min in normal use)
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown';
+  const rl = checkRateLimit(ip, 'stt', 30);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } },
+    );
+  }
+
   const groqKey      = process.env.GROQ_API_KEY;
   const openaiKey    = process.env.OPENAI_API_KEY;
   const speechSecret = process.env.CLOVA_SPEECH_SECRET;
