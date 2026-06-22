@@ -305,8 +305,9 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
   const warmupFramesRef   = useRef(0);
   const lastInterimRef    = useRef('');
   const lastTranscriptRef = useRef('');
-  const lastFrameRef      = useRef(0);          // 마지막 오디오 프레임 수신 시각
-  const startRef          = useRef<() => Promise<void>>(async () => {});  // 자동 재시작용
+  const lastFrameRef      = useRef(0);
+  const softRecoveryRef   = useRef(false);         // 2단계 복구: 소프트(resume) 시도 여부
+  const startRef          = useRef<() => Promise<void>>(async () => {});
   const visibilityHandlerRef = useRef<(() => void) | null>(null);
 
   const setInterim = useCallback((text: string) => {
@@ -327,7 +328,7 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
         if (meetingTopic)    params.set('topic',    meetingTopic);
         if (meetingSpeakers) params.set('speakers', meetingSpeakers);
         // 직전 인식 결과를 Whisper 문맥 프롬프트로 전달 (고유명사·맥락 정확도 향상)
-        if (lastTranscriptRef.current) params.set('context', lastTranscriptRef.current.slice(-80));
+        if (lastTranscriptRef.current) params.set('context', lastTranscriptRef.current.slice(-150));
         const abort = new AbortController();
         const timeoutId = setTimeout(() => abort.abort(), 15000);
         const res = await fetch(`/api/stt?${params}`, {
@@ -448,7 +449,8 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
 
       workletNode.port.onmessage = (e: MessageEvent<Float32Array>) => {
         if (!isListeningRef.current) return;
-        lastFrameRef.current = Date.now(); // 워치독용 타임스탬프
+        lastFrameRef.current = Date.now();
+        softRecoveryRef.current = false; // 프레임 수신 시 소프트 복구 플래그 리셋
         const input = e.data;
         // 실제 샘플레이트 → 16000Hz 다운샘플 (48000Hz 기기 대응)
         const pcm = resampleTo16k(input, actualSampleRate.current);
@@ -462,8 +464,8 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
 
         warmupFramesRef.current++;
 
-        // 처음 6프레임(~1.5초)은 노이즈 플로어 캘리브레이션만 수행
-        if (warmupFramesRef.current <= 6) {
+        // 처음 4프레임(~1초)은 노이즈 플로어 캘리브레이션만 수행
+        if (warmupFramesRef.current <= 4) {
           noiseFloorRef.current = noiseFloorRef.current * (1 - NOISE_ADAPT_RATE) + rms * NOISE_ADAPT_RATE;
           noiseFloorRef.current = Math.max(NOISE_FLOOR_MIN, Math.min(NOISE_FLOOR_MAX, noiseFloorRef.current));
           return;
@@ -525,19 +527,26 @@ function useClovaVoice({ onResult, onInterim, onError, meetingTopic, meetingSpea
         });
       });
 
-      // 1초마다 상태 체크 + 워치독 (statechange 미발화 대비)
+      // 1초마다 상태 체크 + 2단계 워치독
       heartbeatRef.current = setInterval(() => {
         if (!isListeningRef.current) return;
-        // AudioContext 정지 시 즉시 resume
         if (audioCtxRef.current?.state === 'suspended') {
           audioCtxRef.current.resume().catch(() => {});
         }
-        // 워치독: 5초 이상 오디오 프레임 없으면 전체 재시작
-        if (lastFrameRef.current > 0 && Date.now() - lastFrameRef.current > 5000) {
-          lastFrameRef.current = 0;
-          isListeningRef.current = false;
-          teardown();
-          setTimeout(() => { void startRef.current(); }, 500);
+        if (lastFrameRef.current > 0) {
+          const elapsed = Date.now() - lastFrameRef.current;
+          if (elapsed > 3000 && !softRecoveryRef.current) {
+            // 1단계: 3초 무응답 → AudioContext resume 소프트 시도
+            softRecoveryRef.current = true;
+            audioCtxRef.current?.resume().catch(() => {});
+          } else if (elapsed > 6000) {
+            // 2단계: 6초 무응답 → 전체 하드 재시작
+            softRecoveryRef.current = false;
+            lastFrameRef.current = 0;
+            isListeningRef.current = false;
+            teardown();
+            setTimeout(() => { void startRef.current(); }, 300);
+          }
         }
       }, 1000);
 
