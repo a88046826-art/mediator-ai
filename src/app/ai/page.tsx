@@ -612,41 +612,49 @@ export default function AiPage() {
     const aiOnlyCount = aiMessages.length;
     if (prevAiLengthRef.current > 0 && aiOnlyCount > prevAiLengthRef.current) {
       const newMsgs = aiOnlyCount - prevAiLengthRef.current;
-      if (!isSoundMuted) playDing();
-      try { navigator.vibrate?.(200); } catch { /* ignore */ }
+      const latest = aiMessages[aiMessages.length - 1];
+      const isSkip = latest?.content?.trim().startsWith('SKIP');
+
+      // SKIP 메시지는 소리·진동·팝업 없이 조용히 기록만
+      if (!isSkip) {
+        if (!isSoundMuted) playDing();
+        try { navigator.vibrate?.(200); } catch { /* ignore */ }
+      }
       setFlashAiPanel(true);
       setTimeout(() => setFlashAiPanel(false), 1200);
-      const latest = aiMessages[aiMessages.length - 1];
-      if (overlayModeRef.current) {
-        // 오버레이 카드 모드: 전체 화면에 카드로 표시
-        if (latest) {
-          if (overlayCardTimerRef.current) clearTimeout(overlayCardTimerRef.current);
-          const showCard = () => {
-            setOverlayCard({ content: latest.content, isAlert: latest.isAlert });
-            overlayCardTimerRef.current = setTimeout(() => {
-              setOverlayCard(null);
-              overlayCardTimerRef.current = null;
-            }, 12000);
-          };
-          if (latest.isAlert) {
-            showCard();
-          } else {
-            overlayCardTimerRef.current = setTimeout(showCard, 2000);
-          }
-        }
-        if (activeTabRef.current !== 'ai') setUnreadAiCount((prev) => prev + newMsgs);
-      } else {
-        // 탭 모드 (기본): 모바일 배너 표시
-        const isDesktop = typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches;
-        if (!isDesktop && activeTabRef.current !== 'ai') {
-          setUnreadAiCount((prev) => prev + newMsgs);
+
+      if (!isSkip) {
+        if (overlayModeRef.current) {
+          // 오버레이 카드 모드: 전체 화면에 카드로 표시
           if (latest) {
-            if (aiNotificationTimerRef.current) clearTimeout(aiNotificationTimerRef.current);
-            setAiNotification({ content: latest.content, isAlert: latest.isAlert });
-            aiNotificationTimerRef.current = setTimeout(() => {
-              setAiNotification(null);
-              aiNotificationTimerRef.current = null;
-            }, 8000);
+            if (overlayCardTimerRef.current) clearTimeout(overlayCardTimerRef.current);
+            const showCard = () => {
+              setOverlayCard({ content: latest.content, isAlert: latest.isAlert });
+              overlayCardTimerRef.current = setTimeout(() => {
+                setOverlayCard(null);
+                overlayCardTimerRef.current = null;
+              }, 12000);
+            };
+            if (latest.isAlert) {
+              showCard();
+            } else {
+              overlayCardTimerRef.current = setTimeout(showCard, 2000);
+            }
+          }
+          if (activeTabRef.current !== 'ai') setUnreadAiCount((prev) => prev + newMsgs);
+        } else {
+          // 탭 모드 (기본): 모바일 배너 표시
+          const isDesktop = typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches;
+          if (!isDesktop && activeTabRef.current !== 'ai') {
+            setUnreadAiCount((prev) => prev + newMsgs);
+            if (latest) {
+              if (aiNotificationTimerRef.current) clearTimeout(aiNotificationTimerRef.current);
+              setAiNotification({ content: latest.content, isAlert: latest.isAlert });
+              aiNotificationTimerRef.current = setTimeout(() => {
+                setAiNotification(null);
+                aiNotificationTimerRef.current = null;
+              }, 8000);
+            }
           }
         }
       }
