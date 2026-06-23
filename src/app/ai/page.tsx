@@ -7,6 +7,7 @@ import { MeetingSetup } from '@/components/ai/MeetingSetup';
 import { ChatWindow } from '@/components/ai/ChatWindow';
 import { LiveTranscript, type TranscriptEntry } from '@/components/ai/LiveTranscript';
 import { MeetingControls } from '@/components/ai/MeetingControls';
+import { SurveyModal, type SurveyQuestion } from '@/components/ai/SurveyModal';
 import { useVoiceRecognition } from '@/hooks/useVoiceRecognition';
 import { useSession } from '@/hooks/useSession';
 import { getDeviceId } from '@/lib/deviceId';
@@ -18,9 +19,55 @@ import {
   updateTranscriptText as fbUpdateTranscriptText,
   removeTranscript as fbRemoveTranscript,
   addAiMessage as fbAddAiMessage,
-  addSetupEntry,
+  addSetupEntry, saveSurvey,
   type SessionTranscriptEntry, type SessionAiMessage,
 } from '@/lib/session';
+
+const ENTRY_QUESTIONS: SurveyQuestion[] = [
+  {
+    id: 'pain',
+    text: '평소 팀 회의에서 가장 힘든 점은? (복수 선택 가능)',
+    type: 'multi',
+    options: ['발언이 한쪽으로 쏠림', '결론 없이 끝남', '갈등/의견 충돌', '회의가 너무 오래 걸림', '기타'],
+  },
+  {
+    id: 'expectation',
+    text: 'AI 중재자에 대한 기대감은? (1: 낮음 · 5: 높음)',
+    type: 'rating',
+  },
+  {
+    id: 'source',
+    text: 'Meditor를 어떻게 알게 됐나요?',
+    type: 'single',
+    options: ['팀 내부 공유', '지인 추천', 'SNS/온라인', '기타'],
+  },
+];
+
+const EXIT_QUESTIONS: SurveyQuestion[] = [
+  {
+    id: 'helpfulness',
+    text: 'AI 중재가 오늘 회의에 얼마나 도움이 됐나요? (1: 별로 · 5: 매우 도움)',
+    type: 'rating',
+  },
+  {
+    id: 'useful',
+    text: '가장 유용했던 점은?',
+    type: 'single',
+    options: ['갈등 감지 및 중재', '대화 요약', '회의 흐름 정리', '그냥 기록용으로 좋았음', '별로 유용하지 않았음'],
+  },
+  {
+    id: 'reuse',
+    text: '다시 사용하겠나요?',
+    type: 'single',
+    options: ['예, 다음 회의에도 쓸 것 같아요', '아직 모르겠어요', '아니요'],
+  },
+  {
+    id: 'feedback',
+    text: '자유 의견 (개선점, 불편한 점 등)',
+    type: 'text',
+    optional: true,
+  },
+];
 
 type Phase = 'createOrJoin' | 'lobby' | 'meeting' | 'summary';
 type ActiveTab = 'transcript' | 'ai' | 'overview';
@@ -323,6 +370,11 @@ export default function AiPage() {
   const summaryTranscriptRef = useRef<SessionTranscriptEntry[]>([]);
   const summaryAiMessagesRef = useRef<SessionAiMessage[]>([]);
 
+  // surveys
+  const [activeSurvey, setActiveSurvey] = useState<'entry' | 'exit' | null>(null);
+  const entrySurveyShownRef = useRef(false);
+  const pendingEndRef = useRef(false);
+
   const deviceIdRef = useRef('');
   const sessionCodeRef = useRef<string | null>(null);
   sessionCodeRef.current = sessionCode;
@@ -450,6 +502,14 @@ export default function AiPage() {
       setPhase('summary');
     }
   }, [sessionState?.status, phase]);
+
+  // Entry survey: show once when meeting phase starts
+  useEffect(() => {
+    if (phase === 'meeting' && !entrySurveyShownRef.current) {
+      entrySurveyShownRef.current = true;
+      setTimeout(() => setActiveSurvey('entry'), 800);
+    }
+  }, [phase]);
 
   // Host: trigger analysis when transcript grows
   useEffect(() => {
@@ -1256,9 +1316,7 @@ export default function AiPage() {
     URL.revokeObjectURL(url);
   };
 
-  const handleEnd = async () => {
-    stop();
-    setUnreadAiCount(0);
+  const doEndMeeting = async () => {
     if (!sessionCodeRef.current) return;
     // Save to local Zustand history
     if (firebaseTranscript.length > 0) {
@@ -1287,6 +1345,34 @@ export default function AiPage() {
     summaryAiMessagesRef.current = firebaseAiMessages;
     await endMeeting(sessionCodeRef.current);
     // Phase transition happens via useEffect watching sessionState.status
+  };
+
+  const handleEnd = () => {
+    stop();
+    setUnreadAiCount(0);
+    pendingEndRef.current = true;
+    setActiveSurvey('exit');
+  };
+
+  const handleSurveySubmit = async (answers: Record<string, string | string[]>) => {
+    const type = activeSurvey!;
+    setActiveSurvey(null);
+    try {
+      await saveSurvey({ type, sessionCode: sessionCodeRef.current, deviceId: deviceIdRef.current, answers });
+    } catch { /* ignore */ }
+    if (type === 'exit' && pendingEndRef.current) {
+      pendingEndRef.current = false;
+      await doEndMeeting();
+    }
+  };
+
+  const handleSurveySkip = async () => {
+    const type = activeSurvey!;
+    setActiveSurvey(null);
+    if (type === 'exit' && pendingEndRef.current) {
+      pendingEndRef.current = false;
+      await doEndMeeting();
+    }
   };
 
   return (
@@ -1627,6 +1713,26 @@ export default function AiPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Survey modals */}
+      {activeSurvey === 'entry' && (
+        <SurveyModal
+          title="빠른 사전 설문"
+          subtitle="3문항 · 1분"
+          questions={ENTRY_QUESTIONS}
+          onSubmit={handleSurveySubmit}
+          onSkip={handleSurveySkip}
+        />
+      )}
+      {activeSurvey === 'exit' && (
+        <SurveyModal
+          title="회의 후기를 남겨주세요"
+          subtitle="4문항 · 1분"
+          questions={EXIT_QUESTIONS}
+          onSubmit={handleSurveySubmit}
+          onSkip={handleSurveySkip}
+        />
       )}
     </div>
   );

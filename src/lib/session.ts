@@ -131,3 +131,14 @@ export async function addAiMessage(
   const newRef = push(ref(db, `sessions/${code}/aiMessages`));
   await set(newRef, { ...msg, id: newRef.key! });
 }
+
+export async function saveSurvey(data: {
+  type: 'entry' | 'exit';
+  sessionCode: string | null;
+  deviceId: string;
+  answers: Record<string, string | string[]>;
+}): Promise<void> {
+  const db = getDb();
+  const newRef = push(ref(db, 'surveys'));
+  await set(newRef, { ...data, timestamp: Date.now() });
+}
