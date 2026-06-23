@@ -41,6 +41,12 @@ const ENTRY_QUESTIONS: SurveyQuestion[] = [
     type: 'single',
     options: ['팀 내부 공유', '지인 추천', 'SNS/온라인', '기타'],
   },
+  {
+    id: 'team_size',
+    text: '오늘 회의 팀 규모는 어떻게 되나요?',
+    type: 'single',
+    options: ['2~3명', '4~6명', '7명 이상'],
+  },
 ];
 
 const EXIT_QUESTIONS: SurveyQuestion[] = [
@@ -60,6 +66,18 @@ const EXIT_QUESTIONS: SurveyQuestion[] = [
     text: '다음 회의에도 Meditor를 사용하겠나요?',
     type: 'single',
     options: ['예, 적극 사용할게요', '아마 사용할 것 같아요', '아직 모르겠어요', '아니요'],
+  },
+  {
+    id: 'frequency',
+    text: 'AI 개입 빈도는 적절했나요?',
+    type: 'single',
+    options: ['너무 많았어요', '적절했어요', '너무 적었어요'],
+  },
+  {
+    id: 'best_feature',
+    text: '가장 유용했던 기능은?',
+    type: 'single',
+    options: ['실시간 AI 중재', '회의 분석 요약', '액션 아이템 정리', '다음 주제 추천'],
   },
   {
     id: 'feedback',
