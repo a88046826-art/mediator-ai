@@ -142,7 +142,32 @@ export async function saveSurvey(data: {
   deviceId: string;
   answers: Record<string, string | string[]>;
 }): Promise<void> {
-  const db = getDb();
-  const newRef = push(ref(db, 'surveys'));
-  await set(newRef, { ...data, timestamp: Date.now() });
+  // Firebase 저장
+  try {
+    const db = getDb();
+    const newRef = push(ref(db, 'surveys'));
+    await set(newRef, { ...data, timestamp: Date.now() });
+  } catch { /* ignore */ }
+
+  // Supabase 저장
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (supabaseUrl && supabaseKey) {
+    try {
+      await fetch(`${supabaseUrl}/rest/v1/surveys`, {
+        method: 'POST',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({
+          type: data.type,
+          session_code: data.sessionCode,
+          answers: data.answers,
+        }),
+      });
+    } catch { /* ignore */ }
+  }
 }
