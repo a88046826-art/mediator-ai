@@ -1006,6 +1006,27 @@ export default function AiPage() {
     );
   }
 
+  const handleSurveySubmit = async (answers: Record<string, string | string[]>) => {
+    const type = activeSurvey!;
+    setActiveSurvey(null);
+    try {
+      await saveSurvey({ type, sessionCode: sessionCodeRef.current, deviceId: deviceIdRef.current, answers });
+    } catch { /* ignore */ }
+    if (type === 'exit' && pendingEndRef.current) {
+      pendingEndRef.current = false;
+      handleNewMeeting();
+    }
+  };
+
+  const handleSurveySkip = () => {
+    const type = activeSurvey!;
+    setActiveSurvey(null);
+    if (type === 'exit' && pendingEndRef.current) {
+      pendingEndRef.current = false;
+      handleNewMeeting();
+    }
+  };
+
   // ── SUMMARY ──────────────────────────────────────────────────────────────────
   if (phase === 'summary') {
     const transcript = summaryTranscriptRef.current;
@@ -1117,6 +1138,7 @@ export default function AiPage() {
     };
 
     return (
+      <>
       <div className="max-w-2xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-2">
           <h1 className="text-xl font-bold text-slate-200">회의 종료</h1>
@@ -1216,6 +1238,17 @@ export default function AiPage() {
           </>
         )}
       </div>
+
+      {activeSurvey === 'exit' && (
+        <SurveyModal
+          title="회의 후기를 남겨주세요"
+          subtitle="4문항 · 1분"
+          questions={EXIT_QUESTIONS}
+          onSubmit={handleSurveySubmit}
+          onSkip={handleSurveySkip}
+        />
+      )}
+      </>
     );
   }
 
@@ -1351,27 +1384,6 @@ export default function AiPage() {
     stop();
     setUnreadAiCount(0);
     await doEndMeeting();
-  };
-
-  const handleSurveySubmit = async (answers: Record<string, string | string[]>) => {
-    const type = activeSurvey!;
-    setActiveSurvey(null);
-    try {
-      await saveSurvey({ type, sessionCode: sessionCodeRef.current, deviceId: deviceIdRef.current, answers });
-    } catch { /* ignore */ }
-    if (type === 'exit' && pendingEndRef.current) {
-      pendingEndRef.current = false;
-      handleNewMeeting();
-    }
-  };
-
-  const handleSurveySkip = () => {
-    const type = activeSurvey!;
-    setActiveSurvey(null);
-    if (type === 'exit' && pendingEndRef.current) {
-      pendingEndRef.current = false;
-      handleNewMeeting();
-    }
   };
 
   return (
