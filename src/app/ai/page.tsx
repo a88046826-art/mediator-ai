@@ -45,25 +45,25 @@ const ENTRY_QUESTIONS: SurveyQuestion[] = [
 
 const EXIT_QUESTIONS: SurveyQuestion[] = [
   {
-    id: 'helpfulness',
-    text: 'AI 중재가 오늘 회의에 얼마나 도움이 됐나요? (1: 별로 · 5: 매우 도움)',
+    id: 'satisfaction',
+    text: '오늘 Meditor 사용 경험 전반적인 만족도는? (1: 별로 · 5: 매우 만족)',
     type: 'rating',
   },
   {
-    id: 'useful',
-    text: '가장 유용했던 점은?',
+    id: 'real_impact',
+    text: 'AI 중재가 실제로 회의 흐름을 바꿨나요?',
     type: 'single',
-    options: ['갈등 감지 및 중재', '대화 요약', '회의 흐름 정리', '그냥 기록용으로 좋았음', '별로 유용하지 않았음'],
+    options: ['예, 확실히 달라졌어요', '약간 영향이 있었어요', '잘 모르겠어요', '아니요'],
   },
   {
     id: 'reuse',
-    text: '다시 사용하겠나요?',
+    text: '다음 회의에도 Meditor를 사용하겠나요?',
     type: 'single',
-    options: ['예, 다음 회의에도 쓸 것 같아요', '아직 모르겠어요', '아니요'],
+    options: ['예, 적극 사용할게요', '아마 사용할 것 같아요', '아직 모르겠어요', '아니요'],
   },
   {
     id: 'feedback',
-    text: '자유 의견 (개선점, 불편한 점 등)',
+    text: '개선점이나 불편한 점이 있다면 알려주세요',
     type: 'text',
     optional: true,
   },
@@ -1167,7 +1167,7 @@ export default function AiPage() {
                 </button>
               ))}
               <button
-                onClick={handleNewMeeting}
+                onClick={() => { pendingEndRef.current = true; setActiveSurvey('exit'); }}
                 className="w-full py-3 rounded-2xl border border-border text-sm text-slate-500 hover:text-red-400 hover:border-red-500/30 transition-all"
               >
                 종료하기
@@ -1347,11 +1347,10 @@ export default function AiPage() {
     // Phase transition happens via useEffect watching sessionState.status
   };
 
-  const handleEnd = () => {
+  const handleEnd = async () => {
     stop();
     setUnreadAiCount(0);
-    pendingEndRef.current = true;
-    setActiveSurvey('exit');
+    await doEndMeeting();
   };
 
   const handleSurveySubmit = async (answers: Record<string, string | string[]>) => {
@@ -1362,16 +1361,16 @@ export default function AiPage() {
     } catch { /* ignore */ }
     if (type === 'exit' && pendingEndRef.current) {
       pendingEndRef.current = false;
-      await doEndMeeting();
+      handleNewMeeting();
     }
   };
 
-  const handleSurveySkip = async () => {
+  const handleSurveySkip = () => {
     const type = activeSurvey!;
     setActiveSurvey(null);
     if (type === 'exit' && pendingEndRef.current) {
       pendingEndRef.current = false;
-      await doEndMeeting();
+      handleNewMeeting();
     }
   };
 
