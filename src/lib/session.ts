@@ -92,6 +92,10 @@ export async function endMeeting(code: string): Promise<void> {
   await update(ref(getDb(), `sessions/${code}`), { status: 'ended' });
 }
 
+export async function deleteSession(code: string): Promise<void> {
+  await remove(ref(getDb(), `sessions/${code}`));
+}
+
 export async function addTranscript(
   code: string,
   entry: Omit<SessionTranscriptEntry, 'id'>,

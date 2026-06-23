@@ -14,7 +14,7 @@ import { getDeviceId } from '@/lib/deviceId';
 import { isFirebaseConfigured } from '@/lib/firebase';
 import {
   createSession, joinSession, setTopic,
-  startMeeting, endMeeting,
+  startMeeting, endMeeting, deleteSession,
   addTranscript as fbAddTranscript,
   updateTranscriptText as fbUpdateTranscriptText,
   removeTranscript as fbRemoveTranscript,
@@ -917,6 +917,11 @@ export default function AiPage() {
             </div>
           )}
         </div>
+
+        <p className="text-center text-[11px] text-slate-600 leading-relaxed mt-2">
+          회의 내용은 멀티기기 동기화 목적으로 임시 저장되며<br />
+          회의 종료 후 자동으로 삭제됩니다.
+        </p>
       </div>
     );
   }
@@ -1395,6 +1400,9 @@ export default function AiPage() {
     summaryTranscriptRef.current = firebaseTranscript;
     summaryAiMessagesRef.current = firebaseAiMessages;
     await endMeeting(sessionCodeRef.current);
+    // 60초 후 Firebase에서 세션 데이터 삭제 (회의 내용 자동 파기)
+    const codeToDelete = sessionCodeRef.current;
+    setTimeout(() => { deleteSession(codeToDelete).catch(() => {}); }, 60_000);
     // Phase transition happens via useEffect watching sessionState.status
   };
 
