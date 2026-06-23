@@ -527,8 +527,8 @@ export default function AiPage() {
     const newEntries = entries.slice(lastAnalyzedCountRef.current);
     const newCharCount = newEntries.reduce((sum, e) => sum + e.text.length, 0);
     const shouldAnalyze =
-      (newEntries.length >= 4 && newCharCount >= 80) ||
-      newEntries.length >= 10;
+      (newEntries.length >= 3 && newCharCount >= 60) ||
+      newEntries.length >= 7;
     if (shouldAnalyze) {
       lastAnalyzedCountRef.current = entries.length;
       runAnalysis(entries);
@@ -1681,7 +1681,7 @@ export default function AiPage() {
               setOverlayCard(null);
             }}
           />
-          <div className={`relative w-full max-w-sm rounded-2xl border p-5 shadow-2xl animate-fadeIn ${
+          <div className={`relative w-full max-w-xl rounded-2xl border p-5 shadow-2xl animate-fadeIn overflow-y-auto max-h-[80vh] ${
             overlayCard.isAlert
               ? 'bg-orange-950/95 border-orange-500/50'
               : 'bg-[#1a1a2e]/95 border-border'
