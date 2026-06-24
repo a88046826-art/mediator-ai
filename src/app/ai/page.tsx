@@ -19,6 +19,7 @@ import {
   updateTranscriptText as fbUpdateTranscriptText,
   removeTranscript as fbRemoveTranscript,
   addAiMessage as fbAddAiMessage,
+  addAgendaItem as fbAddAgendaItem,
   addSetupEntry, saveSurvey,
   type SessionTranscriptEntry, type SessionAiMessage,
 } from '@/lib/session';
@@ -127,11 +128,12 @@ function playDing() {
   } catch { /* ignore */ }
 }
 
-function buildSystemPrompt(context: string, teamSummary: string): string {
+function buildSystemPrompt(context: string, teamSummary: string, agenda?: string[]): string {
+  const agendaStr = agenda?.length ? `\n안건 목록:\n${agenda.map((a, i) => `${i + 1}. ${a}`).join('\n')}` : '';
   return `당신은 스타트업 팀 전문 AI 중재자입니다.
 
 팀 구성: ${teamSummary || '등록된 팀원 없음'}
-오늘 회의 주제: ${context || '없음'}
+오늘 회의 주제: ${context || '없음'}${agendaStr}
 
 중재 원칙:
 - 발화자를 지목하지 않는다. 누가 말했는지 알 수 없기 때문이다.
@@ -139,11 +141,12 @@ function buildSystemPrompt(context: string, teamSummary: string): string {
 - 2-4문장으로 간결하게. 한국어.`;
 }
 
-function buildAutoPrompt(teamSummary: string, context: string, transcriptText: string, recentAiContent: string): string {
+function buildAutoPrompt(teamSummary: string, context: string, transcriptText: string, recentAiContent: string, agenda?: string[]): string {
+  const agendaStr = agenda?.length ? `\n안건 목록:\n${agenda.map((a, i) => `${i + 1}. ${a}`).join('\n')}` : '';
   return `당신은 팀 회의를 조용히 지켜보는 AI 중재자입니다. 개입은 최소화하고 정말 필요할 때만 말하세요.
 
 팀 구성: ${teamSummary || '없음'}
-회의 주제: ${context || '없음'}
+회의 주제: ${context || '없음'}${agendaStr}
 ${recentAiContent ? `\n[이미 한 말 — 반복 금지]\n${recentAiContent}\n` : ''}
 === 대화 내용 ===
 ${transcriptText}
@@ -376,8 +379,8 @@ export default function AiPage() {
   const [isSoundMuted, setIsSoundMuted] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [isChatInput, setIsChatInput] = useState(false);
-  const [isEditingTopic, setIsEditingTopic] = useState(false);
-  const [topicEditInput, setTopicEditInput] = useState('');
+  const [isAddingAgenda, setIsAddingAgenda] = useState(false);
+  const [agendaInput, setAgendaInput] = useState('');
   const [aiNotification, setAiNotification] = useState<{ content: string; isAlert: boolean } | null>(null);
   const aiNotificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [overlayMode, setOverlayMode] = useState(false);
@@ -587,7 +590,7 @@ export default function AiPage() {
         .map((m) => `• ${m.content.slice(0, 80)}${m.content.length > 80 ? '…' : ''}`)
         .join('\n');
       const result = await callApi(
-        buildAutoPrompt(teamSummaryRef.current, meetingContextRef.current, transcriptText, recentAiContent),
+        buildAutoPrompt(teamSummaryRef.current, meetingContextRef.current, transcriptText, recentAiContent, sessionState?.agenda),
         '위 대화를 분석해주세요.',
         512,
       );
@@ -1593,51 +1596,73 @@ export default function AiPage() {
               <p className="text-xs text-slate-500 mt-1">진행 시간</p>
             </div>
 
-            {/* Topic */}
+            {/* Topic + Agenda */}
             <div className="card">
-              <div className="flex items-center justify-between mb-1.5">
-                <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">회의 주제</p>
-                {isHost && !isEditingTopic && (
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">안건</p>
+                {isHost && (
                   <button
-                    onClick={() => { setTopicEditInput(meetingContextRef.current); setIsEditingTopic(true); }}
-                    className="text-xs text-slate-500 hover:text-accent transition-colors"
+                    onClick={() => { setIsAddingAgenda(true); setAgendaInput(''); }}
+                    className="text-xs text-accent hover:opacity-70 transition-opacity font-medium"
                   >
-                    수정
+                    + 안건 추가
                   </button>
                 )}
               </div>
-              {isEditingTopic ? (
-                <div className="space-y-2">
-                  <textarea
-                    className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 resize-none focus:outline-none focus:border-accent/60 transition-colors"
-                    rows={3}
-                    value={topicEditInput}
-                    onChange={(e) => setTopicEditInput(e.target.value)}
+              <div className="space-y-1.5">
+                {meetingContextRef.current && (
+                  <div className="flex items-start gap-2 text-sm text-slate-200">
+                    <span className="text-slate-500 shrink-0 mt-0.5">·</span>
+                    <span className="leading-relaxed">{meetingContextRef.current}</span>
+                  </div>
+                )}
+                {(sessionState?.agenda ?? []).map((item, i) => (
+                  <div key={i} className="flex items-start gap-2 text-sm text-slate-200">
+                    <span className="text-accent shrink-0 mt-0.5">·</span>
+                    <span className="leading-relaxed">{item}</span>
+                  </div>
+                ))}
+                {!meetingContextRef.current && !(sessionState?.agenda?.length) && (
+                  <p className="text-sm text-slate-600">안건 없음</p>
+                )}
+              </div>
+              {isAddingAgenda && (
+                <div className="mt-3 space-y-2">
+                  <input
+                    className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-accent/60 transition-colors"
+                    placeholder="새 안건 입력"
+                    value={agendaInput}
+                    onChange={(e) => setAgendaInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && agendaInput.trim()) {
+                        fbAddAgendaItem(sessionCodeRef.current!, agendaInput.trim());
+                        setIsAddingAgenda(false);
+                        showToast('안건이 추가됐어요', 'success');
+                      }
+                      if (e.key === 'Escape') setIsAddingAgenda(false);
+                    }}
                     autoFocus
                   />
                   <div className="flex gap-2">
                     <button
-                      onClick={async () => {
-                        if (sessionCodeRef.current) await setTopic(sessionCodeRef.current, topicEditInput);
-                        setIsEditingTopic(false);
-                        showToast('회의 주제가 업데이트됐어요', 'success');
+                      onClick={() => {
+                        if (!agendaInput.trim()) return;
+                        fbAddAgendaItem(sessionCodeRef.current!, agendaInput.trim());
+                        setIsAddingAgenda(false);
+                        showToast('안건이 추가됐어요', 'success');
                       }}
                       className="flex-1 py-1.5 rounded-lg bg-accent text-white text-xs font-semibold hover:opacity-90"
                     >
-                      저장
+                      추가
                     </button>
                     <button
-                      onClick={() => setIsEditingTopic(false)}
+                      onClick={() => setIsAddingAgenda(false)}
                       className="flex-1 py-1.5 rounded-lg border border-border text-slate-400 text-xs hover:text-slate-200 transition-colors"
                     >
                       취소
                     </button>
                   </div>
                 </div>
-              ) : (
-                <p className="text-sm text-slate-200 leading-relaxed">
-                  {meetingContextRef.current || <span className="text-slate-600">주제 없음</span>}
-                </p>
               )}
             </div>
 

@@ -52,6 +52,7 @@ export function useSession(sessionCode: string | null): SessionData | null | und
           status: data.status as SessionData['status'],
           host: data.host as string,
           topic: (data.topic as string) || '',
+          agenda: Array.isArray(data.agenda) ? (data.agenda as string[]) : [],
           members: (data.members as SessionData['members']) || {},
           transcript,
           aiMessages,

@@ -34,6 +34,7 @@ export interface SessionData {
   status: 'lobby' | 'meeting' | 'ended';
   host: string;
   topic: string;
+  agenda: string[];
   members: Record<string, SessionMember>;
   transcript: SessionTranscriptEntry[];
   aiMessages: SessionAiMessage[];
@@ -125,6 +126,13 @@ export async function addSetupEntry(code: string, role: 'user' | 'ai', text: str
 
 export async function removeTranscript(code: string, entryId: string): Promise<void> {
   await remove(ref(getDb(), `sessions/${code}/transcript/${entryId}`));
+}
+
+export async function addAgendaItem(code: string, item: string): Promise<void> {
+  const db = getDb();
+  const snap = await get(ref(db, `sessions/${code}/agenda`));
+  const current: string[] = snap.exists() ? (snap.val() as string[]) : [];
+  await set(ref(db, `sessions/${code}/agenda`), [...current, item]);
 }
 
 export async function addAiMessage(
