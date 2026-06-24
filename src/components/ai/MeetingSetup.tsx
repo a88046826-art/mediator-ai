@@ -293,13 +293,10 @@ export function MeetingSetup({ members, onStart }: Props) {
         ))}
       </div>
 
-      {/* ── AI 채우기 (접이식) ── */}
-      <details className="rounded-xl border border-accent/20 bg-accent/5">
-        <summary className="px-4 py-3 text-sm font-medium text-accent cursor-pointer select-none list-none flex items-center gap-2">
-          <span>✨</span> AI가 채워줄게요
-          <span className="text-xs text-slate-500 font-normal ml-1">자유롭게 말하면 3가지 항목 추천</span>
-        </summary>
-        <div className="px-4 pb-4 space-y-3 border-t border-accent/15 pt-3">
+      {/* ── AI 채우기 ── */}
+      <div className="rounded-xl border border-accent/20 bg-accent/5 px-4 py-4 space-y-3">
+        <p className="text-sm font-medium text-accent">✨ AI가 채워줄게요 <span className="text-xs text-slate-500 font-normal">자유롭게 말하면 3가지 항목 추천</span></p>
+        <div>
           <div className="relative">
             <textarea
               className="input-base w-full text-sm resize-none pr-10"
@@ -348,7 +345,7 @@ export function MeetingSetup({ members, onStart }: Props) {
             </div>
           )}
         </div>
-      </details>
+      </div>
 
       {/* ── 단계별 하단 ── */}
       {setupStep === 'fields' ? (
