@@ -515,6 +515,20 @@ export default function AiPage() {
     if (sessionState.status === 'ended' && phase === 'meeting') {
       summaryTranscriptRef.current = sessionState.transcript;
       summaryAiMessagesRef.current = sessionState.aiMessages;
+      // 비호스트 기기도 localStorage에 저장
+      if (!isHost && sessionState.transcript.length > 0) {
+        saveMeeting({
+          topic: sessionState.topic,
+          teamSummary: Object.values(sessionState.members).map((m) => m.name).join(', '),
+          transcript: sessionState.transcript.map((e) => ({
+            id: e.id, text: e.text, time: e.time, speaker: e.speaker,
+          })),
+          aiMessages: sessionState.aiMessages
+            .filter((m) => m.role === 'ai')
+            .slice(1)
+            .map((m) => ({ id: m.id, role: 'ai' as const, content: m.content, timestamp: String(m.createdAt), isAlert: m.isAlert })),
+        });
+      }
       setSummaryView(null);
       setSummaryContent('');
       setPhase('summary');
