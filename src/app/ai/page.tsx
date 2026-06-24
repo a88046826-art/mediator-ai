@@ -376,6 +376,8 @@ export default function AiPage() {
   const [isSoundMuted, setIsSoundMuted] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [isChatInput, setIsChatInput] = useState(false);
+  const [isEditingTopic, setIsEditingTopic] = useState(false);
+  const [topicEditInput, setTopicEditInput] = useState('');
   const [aiNotification, setAiNotification] = useState<{ content: string; isAlert: boolean } | null>(null);
   const aiNotificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [overlayMode, setOverlayMode] = useState(false);
@@ -1592,12 +1594,52 @@ export default function AiPage() {
             </div>
 
             {/* Topic */}
-            {meetingContextRef.current && (
-              <div className="card">
-                <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1.5">회의 주제</p>
-                <p className="text-sm text-slate-200 leading-relaxed">{meetingContextRef.current}</p>
+            <div className="card">
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">회의 주제</p>
+                {isHost && !isEditingTopic && (
+                  <button
+                    onClick={() => { setTopicEditInput(meetingContextRef.current); setIsEditingTopic(true); }}
+                    className="text-xs text-slate-500 hover:text-accent transition-colors"
+                  >
+                    수정
+                  </button>
+                )}
               </div>
-            )}
+              {isEditingTopic ? (
+                <div className="space-y-2">
+                  <textarea
+                    className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 resize-none focus:outline-none focus:border-accent/60 transition-colors"
+                    rows={3}
+                    value={topicEditInput}
+                    onChange={(e) => setTopicEditInput(e.target.value)}
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={async () => {
+                        if (sessionCodeRef.current) await setTopic(sessionCodeRef.current, topicEditInput);
+                        setIsEditingTopic(false);
+                        showToast('회의 주제가 업데이트됐어요', 'success');
+                      }}
+                      className="flex-1 py-1.5 rounded-lg bg-accent text-white text-xs font-semibold hover:opacity-90"
+                    >
+                      저장
+                    </button>
+                    <button
+                      onClick={() => setIsEditingTopic(false)}
+                      className="flex-1 py-1.5 rounded-lg border border-border text-slate-400 text-xs hover:text-slate-200 transition-colors"
+                    >
+                      취소
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-200 leading-relaxed">
+                  {meetingContextRef.current || <span className="text-slate-600">주제 없음</span>}
+                </p>
+              )}
+            </div>
 
             {/* Room + members */}
             <div className="card space-y-3">

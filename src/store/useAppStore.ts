@@ -44,7 +44,7 @@ export const useAppStore = create<AppState>()(
       meetingContext: '',
       meetingHistory: [],
       toast: null,
-      theme: 'dark',
+      theme: 'meditor',
 
       addTeamMember: (member) =>
         set((s) => ({

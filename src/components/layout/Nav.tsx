@@ -17,7 +17,7 @@ export function Nav() {
       <div className="max-w-5xl mx-auto w-full flex items-center justify-between">
         <Link href="/" className="font-bold text-lg tracking-tight">
           <span className="text-accent">MEDI</span>
-          <span className="text-slate-200">ATOR</span>
+          <span className="text-slate-200">TOR</span>
         </Link>
         <div className="flex items-center gap-1">
           {links.map((l) => (
