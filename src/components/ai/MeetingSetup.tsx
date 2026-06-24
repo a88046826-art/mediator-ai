@@ -117,6 +117,7 @@ export function MeetingSetup({ members, onStart }: Props) {
 
   // ── 공통 ──────────────────────────────────────────────────────────────────
   const [isStarting, setIsStarting] = useState(false);
+  const [setupStep, setSetupStep] = useState<'fields' | 'review'>('fields');
   const hasAny = Object.values(values).some((v) => v.trim());
 
   // 역질문 채팅 스크롤
@@ -235,12 +236,29 @@ export function MeetingSetup({ members, onStart }: Props) {
     onStart(parts.join('\n'));
   };
 
+  const goToReview = () => {
+    setSetupStep('review');
+    startReview();
+  };
+
   // ── 렌더 ──────────────────────────────────────────────────────────────────
   return (
     <div className="card max-w-xl mx-auto space-y-5">
       <div>
-        <h3 className="font-semibold text-slate-200 mb-0.5">회의 설정</h3>
-        <p className="text-xs text-slate-500">아는 것만 채워도 괜찮아요. 3가지 모두 채울수록 AI가 더 잘 중재합니다.</p>
+        <div className="flex items-center gap-3 mb-1">
+          {(['fields', 'review'] as const).map((s, i) => (
+            <div key={s} className="flex items-center gap-1.5">
+              {i > 0 && <div className="w-6 h-px bg-border" />}
+              <div className={`flex items-center gap-1.5 text-xs font-medium ${setupStep === s ? 'text-accent' : 'text-slate-600'}`}>
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border ${setupStep === s ? 'bg-accent/20 border-accent/40 text-accent' : 'border-border text-slate-600'}`}>{i + 1}</span>
+                {s === 'fields' ? '회의 설정' : 'AI 역질문'}
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-slate-500">
+          {setupStep === 'fields' ? '아는 것만 채워도 괜찮아요. 3가지 모두 채울수록 AI가 더 잘 중재합니다.' : 'AI가 입력 내용을 보고 보완 질문을 드려요. 답하고 나면 회의를 시작할 수 있어요.'}
+        </p>
       </div>
 
       {members.length > 0 && (
@@ -328,31 +346,20 @@ export function MeetingSetup({ members, onStart }: Props) {
         ))}
       </div>
 
-      {/* ── AI 역질문 ── */}
-      <div className="rounded-xl border border-slate-700/60 overflow-hidden">
+      {/* ── 단계별 하단 ── */}
+      {setupStep === 'fields' ? (
         <button
-          type="button"
-          onClick={() => { if (!reviewOpen) startReview(); else setReviewOpen((v) => !v); }}
+          className="btn-primary w-full py-3 text-sm disabled:opacity-40"
+          onClick={goToReview}
           disabled={isStarting}
-          className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/5 transition-colors"
         >
-          <div className="flex items-center gap-2">
-            <span className="text-sm">🤖</span>
-            <span className="text-xs font-medium text-slate-300">AI 역질문</span>
-            <span className="text-xs text-slate-500">입력한 내용 보고 AI가 보완 질문을 드려요</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {reviewReady && <span className="text-xs text-green-400">✅ 완료</span>}
-            <svg className={`w-3.5 h-3.5 text-slate-500 transition-transform ${reviewOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </div>
+          다음: AI 역질문 →
         </button>
-
-        {reviewOpen && (
-          <div className="border-t border-slate-700/60 bg-surface/40">
-            {/* 채팅 내역 */}
-            <div className="max-h-56 overflow-y-auto p-3 space-y-2">
+      ) : (
+        <>
+          {/* AI 역질문 채팅 */}
+          <div className="rounded-xl border border-accent/25 bg-accent/5 overflow-hidden">
+            <div className="max-h-64 overflow-y-auto p-3 space-y-2">
               {reviewMessages.length === 0 && isReviewing && (
                 <div className="flex justify-start">
                   <div className="bg-surface2 border border-border px-3 py-2 rounded-2xl rounded-tl-sm flex gap-1 items-center">
@@ -380,8 +387,6 @@ export function MeetingSetup({ members, onStart }: Props) {
               )}
               <div ref={reviewBottomRef} />
             </div>
-
-            {/* 입력창 */}
             {!reviewReady && (
               <div className="p-3 pt-0 flex gap-2">
                 <input
@@ -403,13 +408,25 @@ export function MeetingSetup({ members, onStart }: Props) {
               </div>
             )}
           </div>
-        )}
-      </div>
 
-      <button className="btn-primary w-full py-3 text-sm disabled:opacity-40"
-        onClick={handleStart} disabled={isStarting}>
-        {isStarting ? '준비 중...' : hasAny ? '회의 시작하기 →' : '주제 없이 시작하기 →'}
-      </button>
+          <div className="flex gap-2">
+            <button
+              className="btn-secondary py-2.5 text-xs px-4"
+              onClick={() => setSetupStep('fields')}
+              disabled={isStarting}
+            >
+              ← 돌아가기
+            </button>
+            <button
+              className="btn-primary flex-1 py-2.5 text-sm disabled:opacity-40"
+              onClick={handleStart}
+              disabled={isStarting}
+            >
+              {isStarting ? '준비 중...' : reviewReady ? '✅ 회의 시작하기 →' : '회의 시작하기 →'}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
