@@ -421,9 +421,9 @@ export function MeetingSetup({ members, onStart }: Props) {
             <button
               className="btn-primary flex-1 py-2.5 text-sm disabled:opacity-40"
               onClick={handleStart}
-              disabled={isStarting}
+              disabled={isStarting || !reviewReady}
             >
-              {isStarting ? '준비 중...' : reviewReady ? '✅ 회의 시작하기 →' : '회의 시작하기 →'}
+              {isStarting ? '준비 중...' : reviewReady ? '✅ 회의 시작하기 →' : 'AI 역질문을 완료해주세요'}
             </button>
           </div>
         </>
