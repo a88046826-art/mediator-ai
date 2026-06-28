@@ -30,11 +30,18 @@ export interface SetupChatEntry {
   createdAt: number;
 }
 
+export interface SessionMaterial {
+  id: string;
+  content: string;
+  createdAt: number;
+}
+
 export interface SessionData {
   status: 'lobby' | 'meeting' | 'ended';
   host: string;
   topic: string;
   agenda: string[];
+  materials: SessionMaterial[];
   members: Record<string, SessionMember>;
   transcript: SessionTranscriptEntry[];
   aiMessages: SessionAiMessage[];
@@ -126,6 +133,12 @@ export async function addSetupEntry(code: string, role: 'user' | 'ai', text: str
 
 export async function removeTranscript(code: string, entryId: string): Promise<void> {
   await remove(ref(getDb(), `sessions/${code}/transcript/${entryId}`));
+}
+
+export async function addMaterial(code: string, content: string): Promise<void> {
+  const db = getDb();
+  const newRef = push(ref(db, `sessions/${code}/materials`));
+  await set(newRef, { id: newRef.key!, content, createdAt: Date.now() });
 }
 
 export async function addAgendaItem(code: string, item: string): Promise<void> {

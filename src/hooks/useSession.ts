@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ref, onValue, off } from 'firebase/database';
 import { getDb, isFirebaseConfigured } from '@/lib/firebase';
-import type { SessionData, SessionTranscriptEntry, SessionAiMessage, SetupChatEntry } from '@/lib/session';
+import type { SessionData, SessionTranscriptEntry, SessionAiMessage, SetupChatEntry, SessionMaterial } from '@/lib/session';
 
 // undefined = 코드 없음 또는 Firebase 응답 대기 중, null = Firebase가 "없음" 응답, SessionData = 세션 있음
 export function useSession(sessionCode: string | null): SessionData | null | undefined {
@@ -48,11 +48,17 @@ export function useSession(sessionCode: string | null): SessionData | null | und
               .sort((a, b) => a.createdAt - b.createdAt)
           : [];
 
+        const materials: SessionMaterial[] = data.materials
+          ? (Object.values(data.materials as Record<string, SessionMaterial>))
+              .sort((a, b) => a.createdAt - b.createdAt)
+          : [];
+
         setState({
           status: data.status as SessionData['status'],
           host: data.host as string,
           topic: (data.topic as string) || '',
           agenda: Array.isArray(data.agenda) ? (data.agenda as string[]) : [],
+          materials,
           members: (data.members as SessionData['members']) || {},
           transcript,
           aiMessages,

@@ -20,6 +20,7 @@ import {
   removeTranscript as fbRemoveTranscript,
   addAiMessage as fbAddAiMessage,
   addAgendaItem as fbAddAgendaItem,
+  addMaterial as fbAddMaterial,
   addSetupEntry, saveSurvey,
   type SessionTranscriptEntry, type SessionAiMessage,
 } from '@/lib/session';
@@ -381,6 +382,8 @@ export default function AiPage() {
   const [isChatInput, setIsChatInput] = useState(false);
   const [isAddingAgenda, setIsAddingAgenda] = useState(false);
   const [agendaInput, setAgendaInput] = useState('');
+  const [isAddingMaterial, setIsAddingMaterial] = useState(false);
+  const [materialInput, setMaterialInput] = useState('');
   const [aiNotification, setAiNotification] = useState<{ content: string; isAlert: boolean } | null>(null);
   const aiNotificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [overlayMode, setOverlayMode] = useState(false);
@@ -1657,6 +1660,67 @@ export default function AiPage() {
                     </button>
                     <button
                       onClick={() => setIsAddingAgenda(false)}
+                      className="flex-1 py-1.5 rounded-lg border border-border text-slate-400 text-xs hover:text-slate-200 transition-colors"
+                    >
+                      취소
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Pre-meeting materials */}
+            <div className="card">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">사전 자료</p>
+                {isHost && (
+                  <button
+                    onClick={() => { setIsAddingMaterial(true); setMaterialInput(''); }}
+                    className="text-xs text-accent hover:opacity-70 transition-opacity font-medium"
+                  >
+                    + 추가
+                  </button>
+                )}
+              </div>
+              {(sessionState?.materials ?? []).length > 0 ? (
+                <div className="space-y-2">
+                  {(sessionState?.materials ?? []).map((m) => (
+                    <div key={m.id} className="flex items-start gap-2 text-sm text-slate-300 bg-white/3 rounded-xl px-3 py-2.5">
+                      <span className="text-slate-500 shrink-0 mt-0.5 text-xs">·</span>
+                      <span className="leading-relaxed whitespace-pre-wrap">{m.content}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-600">{isHost ? '참가자들에게 공유할 자료나 일정을 추가하세요' : '호스트가 공유한 자료가 없어요'}</p>
+              )}
+              {isAddingMaterial && (
+                <div className="mt-3 space-y-2">
+                  <textarea
+                    className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-accent/60 transition-colors resize-none"
+                    placeholder="참고 자료, 일정, 링크 등 자유롭게 입력"
+                    rows={3}
+                    value={materialInput}
+                    onChange={(e) => setMaterialInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') setIsAddingMaterial(false);
+                    }}
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        if (!materialInput.trim()) return;
+                        fbAddMaterial(sessionCodeRef.current!, materialInput.trim());
+                        setIsAddingMaterial(false);
+                        showToast('자료가 공유됐어요', 'success');
+                      }}
+                      className="flex-1 py-1.5 rounded-lg bg-accent text-white text-xs font-semibold hover:opacity-90"
+                    >
+                      공유
+                    </button>
+                    <button
+                      onClick={() => setIsAddingMaterial(false)}
                       className="flex-1 py-1.5 rounded-lg border border-border text-slate-400 text-xs hover:text-slate-200 transition-colors"
                     >
                       취소
